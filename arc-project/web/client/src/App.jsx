@@ -12,6 +12,22 @@ function App() {
   const [isScanning, setIsScanning] = useState(false);
   const lastItemRef = useRef(null);
 
+  // Trigger scan on Spacebar
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.code === 'Space') {
+        e.preventDefault(); // Prevent scrolling
+        console.log("Space pressed - Requesting scan");
+        socket.emit('request_scan');
+        setIsScanning(true);
+        setTimeout(() => setIsScanning(false), 2000); // Visual feedback
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   useEffect(() => {
     socket.on('live_feed', (data) => {
       setImageSrc(`data:image/jpeg;base64,${data.image}`);
@@ -125,7 +141,7 @@ function App() {
                     </div>
                     <div>
                       <h3 className="font-medium text-gray-200 capitalize">{item.name.replace('_', ' ')}</h3>
-                      <p className="text-xs text-gray-500">Qty: 1</p>
+                      <p className="text-xs text-gray-500">Qty: {item.qty}</p>
                     </div>
                   </div>
                   <div className="text-right">
