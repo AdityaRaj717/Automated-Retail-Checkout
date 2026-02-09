@@ -1,6 +1,6 @@
 # Installation Instructions
 
-#### Install node modules and python packages before proceeding with the steps below 
+#### Install node modules and python packages after cloning the repo
 
 1. Clone the repo
 ```git clone https://github.com/AdityaRaj717/Automated-Retail-Checkout.git```
