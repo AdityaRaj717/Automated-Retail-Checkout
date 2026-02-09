@@ -17,25 +17,20 @@ const io = new Server(server, {
 io.on('connection', (socket) => {
   console.log('Client connected:', socket.id);
 
-  // 1. Receive Frame from Python -> Send to React
-  socket.on('processed_frame', (data) => {
-    socket.broadcast.emit('live_feed', data);
+  // 1. Python -> React (Video & Data)
+  socket.on('processed_frame', (data) => socket.broadcast.emit('live_feed', data));
+  socket.on('cart_update', (cart) => socket.broadcast.emit('cart_sync', cart));
+
+  // 2. React -> Python (Commands)
+  socket.on('request_scan', () => io.emit('execute_scan'));
+
+  // NEW: Pass cart actions (Add/Remove/Clear) to Python
+  socket.on('cart_action', (action) => {
+    console.log("Action received:", action);
+    io.emit('cart_action_trigger', action);
   });
 
-  // 2. Receive Cart Update from Python -> Send to React
-  socket.on('cart_update', (cart) => {
-    socket.broadcast.emit('cart_sync', cart);
-  });
-
-  // 3. NEW: Receive "Scan Command" from React -> Send to Python
-  socket.on('request_scan', () => {
-    console.log("Triggering Scan...");
-    io.emit('execute_scan'); // Broadcast to Python
-  });
-
-  socket.on('disconnect', () => {
-    console.log('Client disconnected');
-  });
+  socket.on('disconnect', () => console.log('Client disconnected'));
 });
 
 server.listen(3000, () => {

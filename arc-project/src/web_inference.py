@@ -5,6 +5,7 @@ import socketio
 import base64
 import time
 import os
+import sqlite3
 from rembg import remove, new_session
 from PIL import Image
 from torchvision import models, transforms
@@ -15,20 +16,34 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 SERVER_URL = "http://localhost:3000"
 MODEL_PATH = os.path.join(BASE_DIR, "retail_model.pth")
 CLASS_FILE = os.path.join(BASE_DIR, "classes.txt")
+DB_FILE = os.path.join(BASE_DIR, "products.db")
 CAMERA_SOURCE = "http://10.91.73.101:4747/video" 
 
-# LOWERED THRESHOLD TO FIX MISSED DETECTIONS
 CONFIDENCE_THRESHOLD = 50 
+MIN_OBJECT_AREA = 500
 
-PRICES = {
-    '50-50_maska_chaska': 30, 'aim_matchstick': 2, 'farmley_panchmeva': 375,
-    'hajmola': 65, 'maggi_ketchup': 15, 'moms_magic': 10,
-    'monaco': 35, 'tic_tac_toe': 20
-}
-
+# Global State
+cart = []
+product_db = {} # Cache for DB
+scan_trigger = False
 sio = socketio.Client()
-scan_trigger = False # Flag to control scanning
 
+# --- DATABASE HELPERS ---
+def load_product_db():
+    global product_db
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        c = conn.cursor()
+        c.execute("SELECT * FROM products")
+        rows = c.fetchall()
+        # Create a dict: {'key_name': {'name': 'Display Name', 'price': 10}}
+        product_db = {r[0]: {'name': r[1], 'price': r[2]} for r in rows}
+        conn.close()
+        print(f"[INFO] Loaded {len(product_db)} products from Database.")
+    except Exception as e:
+        print(f"[ERROR] Database Error: {e}. Run setup_db.py first!")
+
+# --- SOCKET HANDLERS ---
 @sio.on('connect')
 def on_connect():
     print("[INFO] Connected to Node.js Server")
@@ -39,22 +54,44 @@ def on_execute_scan(data=None):
     print("[CMD] Received Web Trigger -> Scanning...")
     scan_trigger = True
 
+@sio.on('cart_action_trigger')
+def on_cart_action(data):
+    global cart
+    action_type = data.get('type')
+    item_id = data.get('id')
+    
+    print(f"[ACTION] {action_type} on item {item_id}")
+    
+    if action_type == 'clear':
+        cart = []
+        
+    elif action_type == 'remove':
+        cart = [item for item in cart if item['id'] != item_id]
+        
+    elif action_type == 'increment':
+        for item in cart:
+            if item['id'] == item_id:
+                item['qty'] += 1
+                item['total_price'] = item['unit_price'] * item['qty']
+                
+    elif action_type == 'decrement':
+        for item in cart:
+            if item['id'] == item_id:
+                if item['qty'] > 1:
+                    item['qty'] -= 1
+                    item['total_price'] = item['unit_price'] * item['qty']
+    
+    # Send updated cart back to UI immediately
+    sio.emit('cart_update', cart)
+
+# --- ML SETUP ---
 def load_system():
     with open(CLASS_FILE, "r") as f:
         class_names = [line.strip() for line in f.readlines()]
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    
-    # --- UPDATED ARCHITECTURE TO MATCH TRAIN.PY ---
-    # Load EfficientNet-B0 structure (no weights needed, we load ours next)
-    model = models.efficientnet_b0(weights=None)
-    
-    # Recreate the classifier layer exactly as it was in training
-    num_features = model.classifier[1].in_features
-    model.classifier[1] = nn.Linear(num_features, len(class_names))
-    # ---------------------------------------------
-
-    # Load your trained weights
+    model = models.mobilenet_v2(weights=None)
+    model.classifier[1] = nn.Linear(model.last_channel, len(class_names))
     model.load_state_dict(torch.load(MODEL_PATH, map_location=device))
     model = model.to(device)
     model.eval()
@@ -63,7 +100,10 @@ def load_system():
     return model, class_names, device, session
 
 def main():
-    global scan_trigger
+    global scan_trigger, cart
+    
+    # Init
+    load_product_db()
     try:
         sio.connect(SERVER_URL)
     except Exception as e:
@@ -78,52 +118,47 @@ def main():
     ])
 
     cap = cv2.VideoCapture(CAMERA_SOURCE)
-    cart = []
-    
-    print(f"--- SYSTEM READY (Threshold: {CONFIDENCE_THRESHOLD}%) ---")
-    print("Use the WEB INTERFACE (Spacebar) to scan items.")
+    print("--- SYSTEM READY ---")
 
     while True:
         ret, frame = cap.read()
         if not ret: break
         
-        # 1. Stream Frame to Web (Reduced size for speed)
+        # Stream Video
         stream_frame = cv2.resize(frame, (640, 360))
         _, buffer = cv2.imencode('.jpg', stream_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 60])
         b64_image = base64.b64encode(buffer).decode('utf-8')
         sio.emit('processed_frame', {'image': b64_image})
 
-        # 2. Check for Trigger (Spacebar from Web OR 'c' locally)
         key = cv2.waitKey(1) & 0xFF
         
+        # Detection Logic
         if scan_trigger or key == ord(' '):
-            scan_trigger = False # Reset flag
-            print("\n--- PROCESSING SCAN ---")
+            scan_trigger = False
+            print("\n--- PROCESSING IMAGE ---")
             
-            # Use original high-res frame for detection
             rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             pil_img = Image.fromarray(rgb_frame)
-            
-            # Remove Background
             pil_no_bg = remove(pil_img, session=session)
             
-            # Find Contours on Alpha Channel
             alpha_mask = np.array(pil_no_bg)[:, :, 3]
             contours, _ = cv2.findContours(alpha_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
             
-            found_something = False
+            found_items_count = 0
             
             for cnt in contours:
-                if cv2.contourArea(cnt) < 2000: continue 
+                if cv2.contourArea(cnt) < MIN_OBJECT_AREA: continue 
                 
+                # Crop & Predict
                 x, y, w, h = cv2.boundingRect(cnt)
                 item_crop = pil_no_bg.crop((x, y, x+w, y+h))
                 
-                # Create Training-Like Image (Black BG)
-                bg = Image.new('RGB', item_crop.size, (0, 0, 0))
-                bg.paste(item_crop, mask=item_crop.split()[3])
+                max_dim = max(w, h)
+                bg = Image.new('RGB', (max_dim, max_dim), (0, 0, 0))
+                offset_x = (max_dim - w) // 2
+                offset_y = (max_dim - h) // 2
+                bg.paste(item_crop, (offset_x, offset_y), mask=item_crop.split()[3])
                 
-                # Predict
                 img_t = transform(bg).unsqueeze(0).to(device)
                 with torch.no_grad():
                     output = model(img_t)
@@ -131,44 +166,41 @@ def main():
                     conf, idx = torch.max(probs, 1)
                 
                 conf_val = conf.item() * 100
-                item_name = classes[idx.item()]
+                key_name = classes[idx.item()]
                 
                 if conf_val > CONFIDENCE_THRESHOLD:
-                    base_price = PRICES.get(item_name, 0)
+                    # Get details from DB (fallback to defaults if missing)
+                    db_item = product_db.get(key_name, {'name': key_name, 'price': 0})
+                    display_name = db_item['name']
+                    unit_price = db_item['price']
                     
-                    # Check if item exists in cart
-                    existing_item = next((item for item in cart if item['name'] == item_name), None)
+                    # Update Cart Logic
+                    existing_item = next((item for item in cart if item['key_name'] == key_name), None)
                     
                     if existing_item:
-                        # UPDATE existing item
                         existing_item['qty'] += 1
-                        existing_item['price'] = existing_item['qty'] * base_price
-                        print(f"  + Updated: {item_name} (Qty: {existing_item['qty']})")
+                        existing_item['total_price'] = existing_item['qty'] * unit_price
+                        print(f"  + Incremented: {display_name}")
                     else:
                         new_item = {
-                            'name': item_name, 
-                            'price': base_price,
+                            'id': int(time.time() * 1000) + x, # Unique ID
+                            'key_name': key_name,
+                            'display_name': display_name,
+                            'unit_price': unit_price,
                             'qty': 1,
-                            'id': int(time.time() * 1000) + x 
+                            'total_price': unit_price
                         }
                         cart.append(new_item)
-                        print(f"  + Added: {item_name}")
+                        print(f"  + New: {display_name}")
                     
-                    found_something = True
-                else:
-                    print(f"  - Ignored: {item_name} ({conf_val:.1f}%) - Too unsure")
+                    found_items_count += 1
 
-            if found_something:
+            if found_items_count > 0:
                 sio.emit('cart_update', cart)
-                print(f"Sent {len(cart)} items to Web.")
+                print(f"Cart sync sent.")
             else:
-                print("No confident items found.")
+                print("No items found.")
 
-        elif key == ord('c'):
-            cart = []
-            sio.emit('cart_update', cart)
-            print("Cart Cleared.")
-            
         elif key == ord('q'):
             break
 

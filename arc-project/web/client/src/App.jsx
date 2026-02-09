@@ -1,190 +1,140 @@
-import React, { useEffect, useState, useRef } from 'react';
-import io from 'socket.io-client';
-import { ShoppingBag, X, CreditCard, Scan, Zap } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useState, useEffect } from 'react'
+import io from 'socket.io-client'
 
-const socket = io('http://localhost:3000');
+const socket = io('http://localhost:3000')
 
 function App() {
-  const [imageSrc, setImageSrc] = useState(null);
-  const [cart, setCart] = useState([]);
-  const [total, setTotal] = useState(0);
-  const [isScanning, setIsScanning] = useState(false);
-  const lastItemRef = useRef(null);
+  const [image, setImage] = useState(null)
+  const [cart, setCart] = useState([])
+  const [isScanning, setIsScanning] = useState(false)
 
-  // Trigger scan on Spacebar
+  useEffect(() => {
+    socket.on('live_feed', (data) => setImage(`data:image/jpeg;base64,${data.image}`))
+    socket.on('cart_sync', (newCart) => setCart(newCart))
+    return () => socket.off()
+  }, [])
+
+  // Keyboard Trigger
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.code === 'Space') {
-        e.preventDefault(); // Prevent scrolling
-        console.log("Space pressed - Requesting scan");
+        e.preventDefault();
         socket.emit('request_scan');
         setIsScanning(true);
-        setTimeout(() => setIsScanning(false), 2000); // Visual feedback
+        setTimeout(() => setIsScanning(false), 2000);
       }
     };
-
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  useEffect(() => {
-    socket.on('live_feed', (data) => {
-      setImageSrc(`data:image/jpeg;base64,${data.image}`);
-      if (data.image) setIsScanning(true);
-    });
+  // --- ACTIONS ---
+  const sendAction = (type, id = null) => {
+    socket.emit('cart_action', { type, id });
+  };
 
-    socket.on('cart_sync', (newCart) => {
-      setCart(newCart);
-      const newTotal = newCart.reduce((sum, item) => sum + item.price, 0);
-      setTotal(newTotal);
-    });
-
-    return () => socket.off();
-  }, []);
-
-  // Auto-scroll to bottom of cart
-  useEffect(() => {
-    lastItemRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [cart]);
+  const total = cart.reduce((sum, item) => sum + item.total_price, 0);
 
   return (
-    <div className="min-h-screen bg-black text-white font-sans overflow-hidden flex">
-
-      {/* LEFT: Immersive Camera Feed */}
-      <div className="relative flex-1 bg-gray-900 overflow-hidden">
-        {imageSrc ? (
-          <img
-            src={imageSrc}
-            className="w-full h-full object-cover opacity-90"
-            alt="Live Stream"
-          />
-        ) : (
-          <div className="flex flex-col items-center justify-center h-full text-gray-500 space-y-4">
-            <div className="relative w-16 h-16">
-              <span className="absolute inset-0 border-t-2 border-l-2 border-white rounded-tl-lg"></span>
-              <span className="absolute inset-0 border-b-2 border-r-2 border-white rounded-br-lg animate-pulse"></span>
-            </div>
-            <p className="tracking-widest text-xs uppercase">System Offline</p>
+    <div className="min-h-screen bg-gray-900 text-gray-100 font-sans selection:bg-blue-500 selection:text-white">
+      {/* Navbar */}
+      <nav className="border-b border-gray-800 bg-gray-900/50 backdrop-blur-md sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center font-bold">A</div>
+            <span className="text-xl font-bold tracking-tight">ARC System</span>
           </div>
-        )}
-
-        {/* HUD Overlay */}
-        <div className="absolute inset-0 pointer-events-none p-8 flex flex-col justify-between">
           <div className="flex items-center gap-4">
-            <div className="h-2 w-2 bg-red-500 rounded-full animate-ping" />
-            <span className="text-xs font-mono text-red-400 tracking-widest">LIVE FEED • REC</span>
+            <span className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${isScanning ? 'bg-green-500/20 text-green-400' : 'bg-gray-800 text-gray-400'}`}>
+              {isScanning ? '● SCANNING' : '● READY'}
+            </span>
+          </div>
+        </div>
+      </nav>
+
+      <main className="max-w-7xl mx-auto p-4 lg:p-8 grid grid-cols-1 lg:grid-cols-12 gap-8">
+
+        {/* Left: Camera Feed */}
+        <div className="lg:col-span-7 space-y-6">
+          <div className="relative rounded-2xl overflow-hidden bg-gray-800 border border-gray-700 shadow-2xl aspect-video group">
+            {image ? (
+              <img src={image} alt="Live Feed" className="w-full h-full object-cover" />
+            ) : (
+              <div className="flex flex-col items-center justify-center h-full text-gray-500">
+                <p>Waiting for camera feed...</p>
+              </div>
+            )}
+
+            {/* Scan Overlay */}
+            <div className={`absolute inset-0 border-4 border-blue-500 transition-opacity duration-300 pointer-events-none ${isScanning ? 'opacity-100' : 'opacity-0'}`} />
           </div>
 
-          {/* Scanning Box Graphic */}
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="w-[400px] h-[400px] border border-white/20 rounded-3xl relative">
-              <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-blue-500 -mt-1 -ml-1" />
-              <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-blue-500 -mt-1 -mr-1" />
-              <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-blue-500 -mb-1 -ml-1" />
-              <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-blue-500 -mb-1 -mr-1" />
+          <div className="p-6 rounded-2xl bg-gray-800/50 border border-gray-700 backdrop-blur-sm">
+            <h3 className="text-lg font-semibold mb-2">Instructions</h3>
+            <p className="text-gray-400 text-sm">Place items under the camera and press <kbd className="bg-gray-700 px-2 py-1 rounded text-white font-mono">Spacebar</kbd> to scan.</p>
+          </div>
+        </div>
 
-              {isScanning && (
-                <motion.div
-                  initial={{ top: 0 }}
-                  animate={{ top: "100%" }}
-                  transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-                  className="absolute left-0 right-0 h-0.5 bg-blue-500/50 shadow-[0_0_15px_rgba(59,130,246,0.6)]"
-                />
+        {/* Right: Cart */}
+        <div className="lg:col-span-5 flex flex-col h-[calc(100vh-8rem)] sticky top-24">
+          <div className="flex-1 flex flex-col rounded-2xl bg-gray-800 border border-gray-700 shadow-xl overflow-hidden">
+            <div className="p-6 border-b border-gray-700 flex justify-between items-center">
+              <h2 className="text-xl font-bold">Current Cart</h2>
+              <span className="text-sm text-gray-400">{cart.length} Items</span>
+            </div>
+
+            {/* Scrollable List */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              {cart.length === 0 ? (
+                <div className="h-full flex flex-col items-center justify-center text-gray-500 opacity-50">
+                  <p>Cart is empty</p>
+                </div>
+              ) : (
+                cart.map((item) => (
+                  <div key={item.id} className="flex items-center justify-between p-4 rounded-xl bg-gray-700/30 border border-gray-700/50 hover:border-blue-500/30 transition-all group">
+                    <div>
+                      <h4 className="font-semibold text-lg">{item.display_name}</h4>
+                      <p className="text-sm text-gray-400">₹{item.unit_price} x {item.qty}</p>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center bg-gray-800 rounded-lg border border-gray-600">
+                        <button onClick={() => sendAction('decrement', item.id)} className="px-3 py-1 hover:bg-gray-700 text-blue-400 font-bold">-</button>
+                        <span className="px-2 font-mono text-sm">{item.qty}</span>
+                        <button onClick={() => sendAction('increment', item.id)} className="px-3 py-1 hover:bg-gray-700 text-blue-400 font-bold">+</button>
+                      </div>
+                      <div className="text-right min-w-[60px]">
+                        <p className="font-bold text-green-400">₹{item.total_price}</p>
+                      </div>
+                      <button onClick={() => sendAction('remove', item.id)} className="p-2 text-red-400 hover:bg-red-500/10 rounded-lg transition-colors">
+                        ✕
+                      </button>
+                    </div>
+                  </div>
+                ))
               )}
             </div>
-          </div>
-        </div>
-      </div>
 
-      {/* RIGHT: Glassmorphism Cart */}
-      <div className="w-[450px] bg-gray-900/90 backdrop-blur-2xl border-l border-white/10 flex flex-col relative z-10 shadow-2xl">
-
-        {/* Header */}
-        <div className="p-8 pb-4">
-          <div className="flex items-center justify-between mb-2">
-            <h1 className="text-2xl font-bold tracking-tight flex items-center gap-3">
-              <Zap className="text-yellow-400 fill-yellow-400" size={24} />
-              FastCheckout
-            </h1>
-            <span className="text-xs font-mono text-gray-500">{new Date().toLocaleTimeString()}</span>
-          </div>
-          <div className="h-1 w-full bg-gray-800 rounded-full mt-4 overflow-hidden">
-            <div className="h-full bg-blue-500 w-2/3 animate-pulse" />
-          </div>
-        </div>
-
-        {/* Cart Items List */}
-        <div className="flex-1 overflow-y-auto p-8 space-y-4 no-scrollbar">
-          <AnimatePresence>
-            {cart.length === 0 ? (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="h-full flex flex-col items-center justify-center text-gray-600 space-y-4"
-              >
-                <Scan size={48} strokeWidth={1} />
-                <p className="text-sm">Place items in the zone to scan</p>
-              </motion.div>
-            ) : (
-              cart.map((item, index) => (
-                <motion.div
-                  key={index}
-                  initial={{ opacity: 0, x: 20, scale: 0.95 }}
-                  animate={{ opacity: 1, x: 0, scale: 1 }}
-                  exit={{ opacity: 0, x: -20 }}
-                  className="group bg-white/5 hover:bg-white/10 border border-white/5 rounded-2xl p-4 flex items-center justify-between transition-colors"
-                >
-                  <div className="flex items-center gap-4">
-                    <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-xs font-bold">
-                      {item.name[0]}
-                    </div>
-                    <div>
-                      <h3 className="font-medium text-gray-200 capitalize">{item.name.replace('_', ' ')}</h3>
-                      <p className="text-xs text-gray-500">Qty: {item.qty}</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-mono font-bold text-lg">₹{item.price}</p>
-                  </div>
-                </motion.div>
-              ))
-            )}
-            <div ref={lastItemRef} />
-          </AnimatePresence>
-        </div>
-
-        {/* Footer / Total */}
-        <div className="p-8 bg-black/40 border-t border-white/10 space-y-6">
-          <div className="space-y-2">
-            <div className="flex justify-between text-gray-400 text-sm">
-              <span>Subtotal</span>
-              <span>₹{total}</span>
-            </div>
-            <div className="flex justify-between text-gray-400 text-sm">
-              <span>Tax (5%)</span>
-              <span>₹{Math.round(total * 0.05)}</span>
-            </div>
-            <div className="flex justify-between items-end pt-4">
-              <span className="text-xl font-bold">Total</span>
-              <span className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-green-400">
-                ₹{Math.round(total * 1.05)}
-              </span>
+            {/* Footer Total */}
+            <div className="p-6 bg-gray-800 border-t border-gray-700">
+              <div className="flex justify-between items-end mb-4">
+                <span className="text-gray-400">Total Amount</span>
+                <span className="text-3xl font-bold text-white">₹{total}</span>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <button onClick={() => sendAction('clear')} className="w-full py-3 rounded-xl font-semibold bg-gray-700 text-gray-300 hover:bg-gray-600 transition-all">
+                  Clear Cart
+                </button>
+                <button className="w-full py-3 rounded-xl font-bold bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-500/20 transition-all">
+                  Checkout
+                </button>
+              </div>
             </div>
           </div>
-
-          <button
-            disabled={cart.length === 0}
-            className="w-full bg-white text-black font-bold text-lg py-4 rounded-xl hover:bg-gray-200 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-          >
-            <CreditCard size={20} />
-            Pay Now
-          </button>
         </div>
-
-      </div>
+      </main>
     </div>
-  );
+  )
 }
 
-export default App;
+export default App

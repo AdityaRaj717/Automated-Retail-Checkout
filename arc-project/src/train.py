@@ -10,57 +10,69 @@ from PIL import Image
 # --- CONFIG ---
 DATA_DIR = "dataset/processed"
 MODEL_SAVE_PATH = "retail_model.pth"
-BATCH_SIZE = 16  # Increased batch size for stable gradients
-EPOCHS = 15      # Increased epochs for the harder task
-LEARNING_RATE = 0.0005 # Lower LR for fine-tuning
+CLASS_FILE = "classes.txt"
+BATCH_SIZE = 16
+EPOCHS = 30
+LEARNING_RATE = 0.0005
 # --------------
 
 class RandomBackground(object):
-    def __init__(self, bg_dir="dataset/backgrounds"):
-        self.bg_images = []
-        if os.path.exists(bg_dir):
-            self.bg_images = [os.path.join(bg_dir, f) for f in os.listdir(bg_dir) if f.endswith(('.jpg', '.png'))]
-
+    """
+    Pastes the transparent product image onto a random solid color background.
+    This prevents the model from relying on the black void or specific edge artifacts.
+    """
     def __call__(self, img):
         if img.mode == 'RGBA':
-            # 50% chance: Solid Color (Keep this, it's good for robustness)
-            if not self.bg_images or random.random() < 0.5:
-                r, g, b = [random.randint(0, 255) for _ in range(3)]
-                bg = Image.new('RGB', img.size, (r, g, b))
+            # Generate a random color (R, G, B)
+            r = random.randint(0, 255)
+            g = random.randint(0, 255)
+            b = random.randint(0, 255)
             
-            # 50% chance: Real Image Background
-            else:
-                bg_path = random.choice(self.bg_images)
-                bg_tex = Image.open(bg_path).convert('RGB')
-                bg_tex = bg_tex.resize(img.size) # Stretch to fit
-                bg = bg_tex
+            # Create a solid color background
+            bg = Image.new('RGB', img.size, (r, g, b))
             
+            # Paste the image using its own alpha channel as a mask
             bg.paste(img, mask=img.split()[3])
             return bg
         return img.convert('RGB')
 
 def train():
-    print(f"[INFO] Checking dataset in {DATA_DIR}...")
+    # 1. Setup Device
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"[INFO] Training on: {device}")
     
-    # 1. Advanced Transformations
+    print(f"[INFO] Checking dataset in {DATA_DIR}...")
+    if not os.path.exists(DATA_DIR):
+        print(f"[ERROR] Dataset directory '{DATA_DIR}' not found.")
+        return
+
+    # 2. Data Augmentation (The "Anti-Overfit" Suite)
+    # We use random backgrounds + heavy distortion to make 40 images look like 4000
     data_transforms = transforms.Compose([
-        RandomBackground(),
+        RandomBackground(),  # Dynamic background generation
         transforms.Resize((224, 224)),
         transforms.RandomHorizontalFlip(p=0.5),
-        transforms.RandomRotation(30),
-        transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2),
-        transforms.RandomPerspective(distortion_scale=0.2, p=0.5),
+        transforms.RandomRotation(degrees=20),
+        transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2), # Handles lighting changes
+        transforms.RandomPerspective(distortion_scale=0.2, p=0.5),            # Handles angled views
         transforms.ToTensor(),
         transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
     ])
 
-    # 2. Load Data
+    # 3. Load Data
     try:
         full_dataset = datasets.ImageFolder(DATA_DIR, transform=data_transforms)
-    except FileNotFoundError:
-        print("Error: Dataset not found.")
+    except Exception as e:
+        print(f"[ERROR] Could not load dataset: {e}")
         return
 
+    # Save class names immediately so inference stays synced
+    class_names = full_dataset.classes
+    print(f"[INFO] Detected Classes: {class_names}")
+    with open(CLASS_FILE, "w") as f:
+        f.write("\n".join(class_names))
+
+    # Split: 80% Train, 20% Val
     train_size = int(0.8 * len(full_dataset))
     val_size = len(full_dataset) - train_size
     train_dataset, val_dataset = random_split(full_dataset, [train_size, val_size])
@@ -68,22 +80,16 @@ def train():
     train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False)
 
-    class_names = full_dataset.classes
-    print(f"[INFO] Classes: {class_names}")
-    print(f"[INFO] Training on {len(train_dataset)} images | Validation on {len(val_dataset)}")
+    print(f"[INFO] Training on {len(train_dataset)} images, Validating on {len(val_dataset)}")
 
-    # 3. Setup Model
-    print("[INFO] Loading EfficientNet-B0...") 
-    model = models.efficientnet_b0(weights=models.EfficientNet_B0_Weights.DEFAULT)
+    # 4. Setup Model (MobileNetV2 for speed/efficiency)
+    print("[INFO] Loading MobileNetV2...")
+    model = models.mobilenet_v2(weights=models.MobileNet_V2_Weights.DEFAULT)
     
-    # Get the correct input features for the classifier (which is 1280 for B0)
-    # The classifier in torchvision's EfficientNet is a Sequential: [Dropout, Linear]
-    num_features = model.classifier[1].in_features 
-    model.classifier[1] = nn.Linear(num_features, len(class_names))
-    
-    # Strategy: Freeze first 80% of layers, Train last 20%
-    total_layers = len(list(model.features.children()))
-    freeze_until = int(total_layers * 0.8)
+    # Freeze the early layers (Feature Extractors)
+    # We only unfreeze the last few blocks to learn features specific to your boxes
+    total_layers = len(model.features)
+    freeze_until = int(total_layers * 0.8) # Freeze 80%
     
     for i, child in enumerate(model.features.children()):
         if i < freeze_until:
@@ -93,17 +99,16 @@ def train():
             for param in child.parameters():
                 param.requires_grad = True
 
-    # --- REMOVED THE DUPLICATE BLOCK THAT WAS CAUSING THE ERROR ---
-
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"[INFO] Device: {device}")
+    # Replace the Classifier Head
+    model.classifier[1] = nn.Linear(model.last_channel, len(class_names))
     model = model.to(device)
 
+    # 5. Training Setup
     criterion = nn.CrossEntropyLoss()
-    # Only optimize parameters that have grad enabled (the unfrozen 20% + classifier)
+    # Only optimize parameters that require gradients
     optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=LEARNING_RATE)
 
-    # 4. Training Loop
+    # 6. Training Loop
     best_acc = 0.0
     
     for epoch in range(EPOCHS):
@@ -128,7 +133,7 @@ def train():
 
         train_acc = 100 * correct / total
         
-        # Validation Step (Crucial for knowing real performance)
+        # Validation
         model.eval()
         val_correct = 0
         val_total = 0
@@ -144,16 +149,13 @@ def train():
         
         print(f"Epoch {epoch+1}/{EPOCHS} | Loss: {running_loss/len(train_loader):.4f} | Train Acc: {train_acc:.1f}% | Val Acc: {val_acc:.1f}%")
 
-        # Save best model
-        if val_acc > best_acc:
+        # Save best model logic
+        if val_acc >= best_acc:
             best_acc = val_acc
             torch.save(model.state_dict(), MODEL_SAVE_PATH)
+            print(f"  -> Model Saved (New Best)")
 
-    # Save classes
-    with open("classes.txt", "w") as f:
-        f.write("\n".join(class_names))
-        
-    print(f"[DONE] Best Model Saved (Val Acc: {best_acc:.1f}%)")
+    print(f"[DONE] Best Validation Accuracy: {best_acc:.1f}%")
 
 if __name__ == "__main__":
     train()
