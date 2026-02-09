@@ -1,0 +1,37 @@
+const express = require('express');
+const http = require('http');
+const { Server } = require("socket.io");
+const cors = require('cors');
+
+const app = express();
+app.use(cors());
+
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: "*", // Allow React and Python to connect
+    methods: ["GET", "POST"]
+  }
+});
+
+io.on('connection', (socket) => {
+  console.log('Client connected:', socket.id);
+
+  // 1. Receive Frame + Data from Python
+  socket.on('processed_frame', (data) => {
+    // 2. Broadcast to React
+    socket.broadcast.emit('live_feed', data);
+  });
+
+  socket.on('cart_update', (cart) => {
+    socket.broadcast.emit('cart_sync', cart);
+  });
+
+  socket.on('disconnect', () => {
+    console.log('Client disconnected');
+  });
+});
+
+server.listen(3000, () => {
+  console.log('🚀 ARC Bridge Server running on port 3000');
+});
