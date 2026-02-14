@@ -27,7 +27,7 @@ def init_db():
         ('maggi_ketchup', 'Maggi Ketchup', 15),
         ('moms_magic', 'Moms Magic Biscuits', 10),
         ('monaco', 'Monaco Biscuits', 35),
-        ('tic_tac_toe', 'Wooden Tic Tac Toe', 20)
+        ('tic_tac_toe', 'Tic Tac Toe', 20)
     ]
     
     print("--- Seeding Database ---")
