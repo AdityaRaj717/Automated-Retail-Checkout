@@ -6,6 +6,7 @@ from torch.utils.data import DataLoader, random_split
 import os
 import random
 from PIL import Image
+from custom_model import RetailAttnNet
 
 # --- CONFIG ---
 DATA_DIR = "dataset/processed"
@@ -82,26 +83,17 @@ def train():
 
     print(f"[INFO] Training on {len(train_dataset)} images, Validating on {len(val_dataset)}")
 
-    # 4. Setup Model (MobileNetV2 for speed/efficiency)
-    print("[INFO] Loading MobileNetV2...")
-    model = models.mobilenet_v2(weights=models.MobileNet_V2_Weights.DEFAULT)
+    # 4. Setup Model (Custom Research Architecture)
+    print("[INFO] Loading Custom RetailAttnNet (Research Branch)...")
     
-    # Freeze the early layers (Feature Extractors)
-    # We only unfreeze the last few blocks to learn features specific to your boxes
-    total_layers = len(model.features)
-    freeze_until = int(total_layers * 0.8) # Freeze 80%
+    model = RetailAttnNet(num_classes=len(class_names))
     
-    for i, child in enumerate(model.features.children()):
-        if i < freeze_until:
-            for param in child.parameters():
-                param.requires_grad = False
-        else:
-            for param in child.parameters():
-                param.requires_grad = True
-
-    # Replace the Classifier Head
-    model.classifier[1] = nn.Linear(model.last_channel, len(class_names))
+    # Move to GPU/CPU
     model = model.to(device)
+
+    # NOTE: We do NOT freeze layers here. 
+    # Since this is a custom model initialized with random weights, 
+    # we must train ALL layers (Full Fine-Tuning) so they learn to recognize features.
 
     # 5. Training Setup
     criterion = nn.CrossEntropyLoss()
@@ -149,13 +141,13 @@ def train():
         
         print(f"Epoch {epoch+1}/{EPOCHS} | Loss: {running_loss/len(train_loader):.4f} | Train Acc: {train_acc:.1f}% | Val Acc: {val_acc:.1f}%")
 
-        # Save best model logic
         if val_acc >= best_acc:
             best_acc = val_acc
-            torch.save(model.state_dict(), MODEL_SAVE_PATH)
-            print(f"  -> Model Saved (New Best)")
 
-    print(f"[DONE] Best Validation Accuracy: {best_acc:.1f}%")
+    print(f"[INFO] Training finished. Saving final model state...")
+    torch.save(model.state_dict(), MODEL_SAVE_PATH)
+    print(f"[DONE] Model saved to {MODEL_SAVE_PATH}")
+    print(f"[INFO] Best Validation Accuracy observed: {best_acc:.1f}%")
 
 if __name__ == "__main__":
     train()
