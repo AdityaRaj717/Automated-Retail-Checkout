@@ -27,3 +27,47 @@ dist-ssr
 *.sln
 *.sw?
 
+# --- ARC PROJECT EXCLUSIONS ---
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+pip-log.txt
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+
+# Models, weights, and embeddings
+*.pth
+*.pt
+*.onnx
+*.tflite
+embeddings.pkl
+
+# Model cache
+.cache/
+torch_cache/
+
+# Databases
+*.sqlite
+*.db
+src/products.db
+
+# Datasets & Downloads
+dataset/
+research_papers/
+
+# Screenshots from checkout system
+screenshots/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS files
+Thumbs.db
+.DS_Store

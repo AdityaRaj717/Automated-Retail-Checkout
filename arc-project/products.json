@@ -1,0 +1,34 @@
+{
+    "50-50_maska_chaska": {
+        "name": "Britannia 50-50 Maska Chaska",
+        "price": 10
+    },
+    "aim_matchstick": {
+        "name": "AIM Matchstick Box",
+        "price": 5
+    },
+    "farmley_panchmeva": {
+        "name": "Farmley Panchmeva Mix",
+        "price": 30
+    },
+    "hajmola": {
+        "name": "Hajmola Regular",
+        "price": 20
+    },
+    "maggi_ketchup": {
+        "name": "Maggi Hot & Sweet Ketchup",
+        "price": 25
+    },
+    "moms_magic": {
+        "name": "Sunfeast Mom's Magic",
+        "price": 10
+    },
+    "monaco": {
+        "name": "Parle Monaco Classic",
+        "price": 10
+    },
+    "tic_tac_toe": {
+        "name": "Parle Tic Tac Toe",
+        "price": 10
+    }
+}
