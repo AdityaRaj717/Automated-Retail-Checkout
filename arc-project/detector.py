@@ -187,3 +187,83 @@ class ProductDetector:
         )
         self.frame_count = 0
         self.bg_ready = False
+        self._reference_bg = None
+
+    def set_background(self, frame: np.ndarray):
+        """Store a reference background frame for capture-based detection."""
+        self._reference_bg = cv2.GaussianBlur(
+            cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY), (21, 21), 0
+        )
+
+    def capture(self, frame: np.ndarray) -> list:
+        """
+        On-demand detection: compare frame against stored background reference
+        to find and classify products. Used by the web UI capture flow.
+
+        Returns same format as detect().
+        """
+        if self._reference_bg is None:
+            # No background set yet — use a simple approach
+            # Convert to grayscale and threshold to find objects
+            self.set_background(np.full_like(frame, 200))  # Light gray as default
+
+        # Frame differencing against reference
+        gray = cv2.GaussianBlur(
+            cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY), (21, 21), 0
+        )
+        diff = cv2.absdiff(self._reference_bg, gray)
+        _, thresh = cv2.threshold(diff, 30, 255, cv2.THRESH_BINARY)
+
+        # Morphological cleanup
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
+        thresh = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel, iterations=3)
+        thresh = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, kernel, iterations=2)
+        thresh = cv2.dilate(thresh, kernel, iterations=2)
+
+        # Find contours
+        contours, _ = cv2.findContours(
+            thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+        )
+
+        detections = []
+        for contour in contours:
+            area = cv2.contourArea(contour)
+            if area < MIN_CONTOUR_AREA:
+                continue
+
+            x, y, w, h = cv2.boundingRect(contour)
+
+            # Add padding
+            pad = 10
+            x1 = max(0, x - pad)
+            y1 = max(0, y - pad)
+            x2 = min(frame.shape[1], x + w + pad)
+            y2 = min(frame.shape[0], y + h + pad)
+
+            crop = frame[y1:y2, x1:x2]
+            if crop.size == 0:
+                continue
+
+            # Classify
+            embedding = self._extract_embedding(crop)
+            probabilities = self.knn.predict_proba(embedding)[0]
+            best_idx = np.argmax(probabilities)
+            confidence = probabilities[best_idx]
+            label = self.knn.classes_[best_idx]
+
+            if confidence >= CONFIDENCE_THRESHOLD:
+                detections.append({
+                    "label": label,
+                    "confidence": float(confidence),
+                    "bbox": (x, y, w, h),
+                })
+
+        # Deduplicate
+        seen = {}
+        for det in detections:
+            lbl = det["label"]
+            if lbl not in seen or det["confidence"] > seen[lbl]["confidence"]:
+                seen[lbl] = det
+
+        return list(seen.values())
+
