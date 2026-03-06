@@ -12,6 +12,7 @@ import os
 import io
 import time
 import threading
+from collections import deque
 import cv2
 import numpy as np
 from contextlib import asynccontextmanager
@@ -102,13 +103,6 @@ async def lifespan(app: FastAPI):
     print(f"Connecting to DroidCam: {DROIDCAM_URL}")
     camera.start()
 
-    # Set initial background after a short delay
-    print("Waiting for initial background frame...")
-    time.sleep(1)
-    bg_frame = camera.get_frame()
-    if bg_frame is not None:
-        detector.set_background(bg_frame)
-        print("Background reference set!")
     print()
     print("Server ready! API at http://localhost:8000")
     print("Docs at http://localhost:8000/docs")
@@ -202,12 +196,14 @@ def _draw_detections(frame, detections):
 def video_feed_debug():
     """
     MJPEG stream with live bounding boxes drawn on detected products.
-    Detection runs at a throttled rate (~2 Hz) to keep CPU usage reasonable.
+    Uses temporal smoothing: keeps a rolling window of recent detections
+    and only shows products that appear consistently (>=50% of recent runs).
     """
     def generate():
-        last_detections = []
+        detection_history = deque(maxlen=6)  # ~3 seconds of history
+        stable_detections = []
         last_detect_time = 0
-        detect_interval = 0.5  # Run detection every 500ms
+        detect_interval = 1.0  # Run rembg detection every 1s (heavier than bg subtraction)
 
         while True:
             frame = camera.get_frame()
@@ -218,7 +214,13 @@ def video_feed_debug():
             now = time.time()
             if now - last_detect_time >= detect_interval:
                 try:
-                    raw_dets = detector.capture(frame)
+                    # Grab a few frames and average for this detection run
+                    frames = [camera.get_frame() for _ in range(3)]
+                    frames = [f for f in frames if f is not None]
+                    if frames:
+                        raw_dets = detector.capture_multi(frames)
+                    else:
+                        raw_dets = detector.capture(frame)
 
                     # Enrich with product names from DB
                     enriched = []
@@ -226,17 +228,57 @@ def video_feed_debug():
                         product = db.get_product_by_slug(det["label"])
                         name = product["name"] if product else det["label"]
                         enriched.append({
+                            "slug": det["label"],
                             "label": name,
                             "confidence": det["confidence"],
                             "bbox": det["bbox"],
                         })
-                    last_detections = enriched
+                    detection_history.append(enriched)
+
+                    # ── Temporal consensus ──────────────────────────────
+                    # Count how often each product appears across history
+                    if len(detection_history) >= 3:
+                        slug_counts = {}    # slug -> count of appearances
+                        slug_bboxes = {}    # slug -> list of (bbox, conf, label)
+                        for run in detection_history:
+                            for det in run:
+                                s = det["slug"]
+                                slug_counts[s] = slug_counts.get(s, 0) + 1
+                                if s not in slug_bboxes:
+                                    slug_bboxes[s] = []
+                                slug_bboxes[s].append((
+                                    det["bbox"], det["confidence"], det["label"]
+                                ))
+
+                        # Keep only products in >= 50% of recent runs
+                        threshold = len(detection_history) * 0.5
+                        stable = []
+                        for slug, count in slug_counts.items():
+                            if count >= threshold:
+                                entries = slug_bboxes[slug]
+                                # Average bounding box across appearances
+                                avg_x = int(sum(b[0] for b, _, _ in entries) / len(entries))
+                                avg_y = int(sum(b[1] for b, _, _ in entries) / len(entries))
+                                avg_w = int(sum(b[2] for b, _, _ in entries) / len(entries))
+                                avg_h = int(sum(b[3] for b, _, _ in entries) / len(entries))
+                                avg_conf = sum(c for _, c, _ in entries) / len(entries)
+                                label = entries[-1][2]  # Latest name
+                                stable.append({
+                                    "label": label,
+                                    "confidence": avg_conf,
+                                    "bbox": (avg_x, avg_y, avg_w, avg_h),
+                                })
+                        stable_detections = stable
+                    else:
+                        # Not enough history yet, show raw
+                        stable_detections = enriched
+
                 except Exception:
-                    pass  # Keep last known detections on error
+                    pass  # Keep last known stable detections
                 last_detect_time = now
 
-            # Draw detections on the frame
-            annotated = _draw_detections(frame.copy(), last_detections)
+            # Draw stable detections on the frame
+            annotated = _draw_detections(frame.copy(), stable_detections)
 
             _, jpeg = cv2.imencode('.jpg', annotated, [cv2.IMWRITE_JPEG_QUALITY, 70])
             yield (
@@ -254,7 +296,8 @@ def video_feed_debug():
 @app.post("/capture")
 def capture():
     """
-    Capture the current frame and run product detection.
+    Capture the current frame and run product detection using
+    rembg (U2-Net) segmentation + kNN classification.
     Returns detected products with confidence scores.
     """
     frame = camera.get_frame()
