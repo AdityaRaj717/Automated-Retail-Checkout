@@ -149,15 +149,12 @@ class DepthEstimator:
     def generate_occlusion_map(self, frame: np.ndarray,
                                 depth_map: np.ndarray = None) -> np.ndarray:
         """
-        Generate a Screen-Space Ambient Occlusion (SSAO) map.
+        Generate a Screen-Space Ambient Occlusion (SSAO) map with:
+          1. Cavity detection (Laplacian of depth → concavities)
+          2. Contact shadows (proximity darkening near depth edges)
+          3. Hemisphere occlusion (range-checked sampling)
 
-        For each pixel, samples surrounding points and checks how many are
-        at a shallower depth (occluding). Result is a grayscale image:
-        - Black = highly occluded (crevices, contact points, under objects)
-        - White = fully exposed to ambient light
-
-        Returns:
-            Grayscale BGR image of the AO map.
+        Result is grayscale: black = occluded (contact points), white = exposed.
         """
         if depth_map is None:
             depth_map = self._last_depth_map
@@ -174,51 +171,81 @@ class DepthEstimator:
         # Normalize depth to 0–1 (0 = closest, 1 = farthest)
         depth_norm = ((depth_map - d_min) / (d_max - d_min)).astype(np.float32)
 
-        # SSAO: compare each pixel with surrounding samples
-        # Use multiple radii for multi-scale AO
-        ao = np.zeros((h, w), dtype=np.float32)
-        sample_radii = [3, 7, 15, 25]
-        num_directions = 8
+        # Smooth slightly to reduce noise from DAv2
+        depth_smooth = cv2.GaussianBlur(depth_norm, (3, 3), 0)
 
-        for radius in sample_radii:
-            occlusion_count = np.zeros((h, w), dtype=np.float32)
-            for i in range(num_directions):
-                angle = 2.0 * np.pi * i / num_directions
+        # ── Layer 1: Cavity Detection (Laplacian) ──────────────────
+        # Second derivative of depth: positive = concavity (contact points)
+        laplacian = cv2.Laplacian(depth_smooth, cv2.CV_32F, ksize=5)
+        # Concavities → positive laplacian → darker
+        cavity = np.clip(laplacian * 8.0, 0, 1)
+
+        # ── Layer 2: Contact Shadows (proximity to depth edges) ────
+        # Find sharp depth edges (where objects meet the table)
+        grad_x = cv2.Sobel(depth_smooth, cv2.CV_32F, 1, 0, ksize=3)
+        grad_y = cv2.Sobel(depth_smooth, cv2.CV_32F, 0, 1, ksize=3)
+        grad_mag = np.sqrt(grad_x ** 2 + grad_y ** 2)
+
+        # Strong edges = object-to-table or object-to-object borders
+        edge_threshold = np.percentile(grad_mag, 85)
+        edges = (grad_mag > edge_threshold).astype(np.uint8) * 255
+
+        # Spread contact shadow from edges using distance transform
+        # Invert: distance from nearest edge
+        dist = cv2.distanceTransform(255 - edges, cv2.DIST_L2, 5)
+        # Contact shadow falloff: strong near edge, fading over ~20px
+        contact_shadow_radius = 20.0
+        contact = np.clip(1.0 - dist / contact_shadow_radius, 0, 1)
+        contact = contact * 0.6  # Max darkness from contact
+
+        # ── Layer 3: Hemisphere Occlusion (range-checked) ──────────
+        ao_hemi = np.zeros((h, w), dtype=np.float32)
+        radii = [5, 12, 22]
+        n_dirs = 8
+        range_check = 0.08  # Only count samples within this depth range
+
+        for radius in radii:
+            occ = np.zeros((h, w), dtype=np.float32)
+            for i in range(n_dirs):
+                angle = 2.0 * np.pi * i / n_dirs
                 dx = int(round(radius * np.cos(angle)))
                 dy = int(round(radius * np.sin(angle)))
 
-                # Shift the depth map
-                shifted = np.roll(np.roll(depth_norm, dy, axis=0), dx, axis=1)
+                shifted = np.roll(np.roll(depth_smooth, dy, axis=0), dx, axis=1)
+                diff = depth_smooth - shifted
 
-                # Where shifted pixel is closer (smaller depth) → that sample occludes
-                # We want a threshold-based comparison
-                diff = depth_norm - shifted
-                occlusion_count += (diff > 0.01).astype(np.float32)
+                # Only count as occluder if it's closer AND within range
+                # (prevents distant surfaces from causing occlusion)
+                occluding = (diff > 0.005) & (diff < range_check)
+                occ += occluding.astype(np.float32)
 
-            # Normalize: fraction of samples that occlude this pixel
-            ao += occlusion_count / num_directions
+            ao_hemi += occ / n_dirs
 
-        # Average across radii
-        ao = ao / len(sample_radii)
+        ao_hemi = ao_hemi / len(radii)
 
-        # ao is in [0, 1] where 1 = fully occluded
-        # Invert: 0 = occluded (dark), 1 = exposed (bright)
-        ao_inverted = 1.0 - ao
+        # ── Combine all layers ─────────────────────────────────────
+        # Cavity: strongest at concavities
+        # Contact: darkens near depth edges
+        # Hemisphere: general ambient occlusion
+        combined = np.clip(cavity * 0.5 + contact + ao_hemi * 0.4, 0, 1)
 
-        # Apply contrast enhancement
-        ao_inverted = np.clip(ao_inverted * 1.5 - 0.2, 0, 1)
+        # Invert: occluded → dark, exposed → bright
+        ao_result = 1.0 - combined
+
+        # Contrast enhancement to make contacts pop
+        ao_result = np.clip((ao_result - 0.3) * 1.8, 0, 1)
 
         # Convert to uint8
-        ao_uint8 = (ao_inverted * 255).astype(np.uint8)
+        ao_uint8 = (ao_result * 255).astype(np.uint8)
 
-        # Apply slight blur for smoother appearance
-        ao_uint8 = cv2.GaussianBlur(ao_uint8, (5, 5), 0)
+        # Smooth for clean appearance
+        ao_uint8 = cv2.bilateralFilter(ao_uint8, 5, 40, 40)
 
-        # Convert to BGR for serving
         self._last_occlusion = cv2.cvtColor(ao_uint8, cv2.COLOR_GRAY2BGR)
         return self._last_occlusion
 
     def get_last_occlusion(self) -> np.ndarray:
         """Return the last generated occlusion map, or None."""
         return getattr(self, '_last_occlusion', None)
+
 
