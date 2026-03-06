@@ -269,9 +269,11 @@ slide13.addTable([
     { text: "Recall", options: { bold: true, fill: { color: C_TEAL }, color: "FFFFFF", align: "center" } },
     { text: "F1-Score", options: { bold: true, fill: { color: C_TEAL }, color: "FFFFFF", align: "center" } }],
     [{ text: "Our Pipeline (kNN + Embeddings)", options: { bold: true } }, { text: "97.19%", options: { align: "center" } }, { text: "0.9723", options: { align: "center" } }, { text: "0.9719", options: { align: "center" } }, { text: "0.9719", options: { align: "center" } }],
+    [{ text: "ResNet18 Classifier (fine-tuned)" }, { text: "99.69%", options: { align: "center" } }, { text: "0.9970", options: { align: "center" } }, { text: "0.9969", options: { align: "center" } }, { text: "0.9969", options: { align: "center" } }],
     [{ text: "SVM (RBF Kernel)" }, { text: "99.69%", options: { align: "center" } }, { text: "0.9970", options: { align: "center" } }, { text: "0.9969", options: { align: "center" } }, { text: "0.9969", options: { align: "center" } }],
     [{ text: "Random Forest" }, { text: "98.44%", options: { align: "center" } }, { text: "0.9847", options: { align: "center" } }, { text: "0.9844", options: { align: "center" } }, { text: "0.9844", options: { align: "center" } }],
-    [{ text: "MLP Neural Network" }, { text: "99.69%", options: { align: "center" } }, { text: "0.9970", options: { align: "center" } }, { text: "0.9969", options: { align: "center" } }, { text: "0.9969", options: { align: "center" } }]
+    [{ text: "MLP Neural Network" }, { text: "99.69%", options: { align: "center" } }, { text: "0.9970", options: { align: "center" } }, { text: "0.9969", options: { align: "center" } }, { text: "0.9969", options: { align: "center" } }],
+    [{ text: "YOLOv8 (est. from literature)", options: { italic: true } }, { text: "~95-98%", options: { align: "center", italic: true } }, { text: "~0.96", options: { align: "center", italic: true } }, { text: "~0.96", options: { align: "center", italic: true } }, { text: "~0.96", options: { align: "center", italic: true } }]
 ], {
     x: 0.5, y: 1.4, w: 9, h: 2.5,
     colW: [3.5, 1.4, 1.4, 1.4, 1.3],
@@ -359,10 +361,11 @@ slide16.addTable([
     [{ text: "Model", options: { bold: true, fill: { color: C_DEEPBLUE }, color: "FFFFFF" } },
     { text: "Retrain Time", options: { bold: true, fill: { color: C_DEEPBLUE }, color: "FFFFFF", align: "center" } },
     { text: "Speedup", options: { bold: true, fill: { color: C_DEEPBLUE }, color: "FFFFFF", align: "center" } }],
-    [{ text: "kNN (Ours)", options: { bold: true } }, { text: "0.61 ms", options: { align: "center", bold: true, color: "059669" } }, { text: "1,597x faster", options: { align: "center", bold: true, color: "059669" } }],
-    [{ text: "SVM" }, { text: "80.25 ms", options: { align: "center" } }, { text: "12x", options: { align: "center" } }],
-    [{ text: "Random Forest" }, { text: "375.56 ms", options: { align: "center" } }, { text: "3x", options: { align: "center" } }],
-    [{ text: "MLP" }, { text: "979.10 ms", options: { align: "center", color: C_RED } }, { text: "1x (slowest)", options: { align: "center", color: C_RED } }]
+    [{ text: "kNN (Ours)", options: { bold: true } }, { text: "0.48 ms", options: { align: "center", bold: true, color: "059669" } }, { text: "12,760x faster", options: { align: "center", bold: true, color: "059669" } }],
+    [{ text: "SVM" }, { text: "86.25 ms", options: { align: "center" } }, { text: "71x", options: { align: "center" } }],
+    [{ text: "MLP" }, { text: "2,600 ms", options: { align: "center" } }, { text: "2.4x", options: { align: "center" } }],
+    [{ text: "ResNet18 Classifier" }, { text: "6,125 ms", options: { align: "center", color: C_RED } }, { text: "1x", options: { align: "center", color: C_RED } }],
+    [{ text: "YOLOv8 (full retrain)", options: { italic: true } }, { text: "~300,000 ms", options: { align: "center", color: C_RED, italic: true } }, { text: "~5 min", options: { align: "center", color: C_RED, italic: true } }]
 ], {
     x: 0.5, y: 1.4, w: 9, h: 1.5,
     colW: [3.5, 3, 2.5],

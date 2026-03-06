@@ -1,0 +1,26 @@
+================================================================================
+  EXTENDED EVALUATION — ResNet & YOLO Comparisons
+================================================================================
+  Date: 2026-03-07 00:10
+
+Model                           Accuracy  Precision   Recall       F1      Retrain
+--------------------------------------------------------------------------------
+Our Pipeline (kNN)                0.9719     0.9723   0.9719   0.9719      0.48 ms
+SVM (RBF)                         0.9969     0.9970   0.9969   0.9969     86.25 ms
+Random Forest                     0.9844     0.9847   0.9844   0.9844     86.25 ms
+MLP Network                       0.9969     0.9970   0.9969   0.9969   2600.39 ms
+ResNet18 Classifier               0.9969     0.9970   0.9969   0.9969   6124.56 ms
+YOLOv8 (est.)                    ~95-98%      ~0.96    ~0.96    ~0.96    300000 ms
+
+RESNET18 CLASSIFIER DETAILS:
+  Architecture: ResNet18 + FC(8)
+  Training: Fine-tuned with Adam (lr=1e-4), 15 epochs
+  CV: 5-Fold Stratified
+  Accuracy: 0.9969
+  Retrain: 6.1 seconds
+
+YOLO COMPARISON (Qualitative):
+  - Requires bounding box annotations (labor-intensive)
+  - Typical training: 50-100 epochs, ~5-30 minutes minimum
+  - Closed-world: unknown items are silently ignored
+  - Cannot hot-reload new products without full retraining
