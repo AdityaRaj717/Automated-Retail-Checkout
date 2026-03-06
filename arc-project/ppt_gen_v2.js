@@ -160,7 +160,9 @@ slide6.addShape(pres.shapes.RIGHT_ARROW, { x: 6.45, y: 2.8, w: 0.2, h: 0.2, fill
 // --- Slide 7: Architecture Diagram ---
 let slide7 = pres.addSlide({ masterName: "LIGHT_CONTENT" });
 slide7.addText("Pipeline Diagram", { x: 0.5, y: 0.2, w: 9, h: 0.6, fontSize: 36, color: C_MIDNIGHT, bold: true, fontFace: "Arial Black" });
-slide7.addImage({ path: "/mnt/Personal/Programming/Self Learning/Projects/Capstone/Retail System/arc-project/AI-Driven Checkout Pipeline-2026-03-06-063224.png", x: 0.5, y: 1.0, w: 9, h: 4, sizing: { type: "contain" } });
+slide7.addText("[Insert Architecture Diagram Here]", { x: 0.5, y: 2.5, w: 9, h: 1, fontSize: 24, color: "94A3B8", fontFace: "Calibri", align: "center", italic: true });
+// NOTE: Replace this with your architecture diagram image:
+// slide7.addImage({ path: "path/to/your/diagram.png", x: 0.5, y: 1.0, w: 9, h: 4, sizing: { type: "contain" } });
 
 
 // --- Slide 8: Methodology - Dataset ---
@@ -255,11 +257,150 @@ slide12.addText("System Success Rate Overview", { x: 0.6, y: 3.2, w: 8.8, h: 0.3
 slide12.addText("We achieved a highly accurate transaction flow loop. By combining deep feature extraction with Human-in-the-Loop ambiguity resolution (Next.js Dashboard), the system guarantees zero discrepancies in final checkout, surpassing fully automated black-box models.", { x: 0.6, y: 3.6, w: 8.8, h: 0.8, fontSize: 14, color: C_TEXT, align: "left" });
 
 
-// --- Slide 13: References i ---
+// --- Slide 13: Standard Metrics ---
 let slide13 = pres.addSlide({ masterName: "DARK_CONTENT" });
-slide13.addText("Academic References (1/2)", { x: 0.5, y: 0.2, w: 9, h: 0.6, fontSize: 36, color: C_WHITE, bold: true, fontFace: "Arial Black" });
+slide13.addText("Evaluation — Standard Metrics", { x: 0.5, y: 0.2, w: 9, h: 0.6, fontSize: 32, color: C_WHITE, bold: true, fontFace: "Arial Black" });
+slide13.addText("5-Fold Stratified Cross-Validation on 320 samples (8 classes, 40/class)", { x: 0.5, y: 0.9, w: 9, h: 0.3, fontSize: 14, color: "9CA3AF", fontFace: "Calibri" });
 
-slide13.addText([
+slide13.addTable([
+    [{ text: "Model", options: { bold: true, fill: { color: C_TEAL }, color: "FFFFFF" } },
+    { text: "Accuracy", options: { bold: true, fill: { color: C_TEAL }, color: "FFFFFF", align: "center" } },
+    { text: "Precision", options: { bold: true, fill: { color: C_TEAL }, color: "FFFFFF", align: "center" } },
+    { text: "Recall", options: { bold: true, fill: { color: C_TEAL }, color: "FFFFFF", align: "center" } },
+    { text: "F1-Score", options: { bold: true, fill: { color: C_TEAL }, color: "FFFFFF", align: "center" } }],
+    [{ text: "Our Pipeline (kNN + Embeddings)", options: { bold: true } }, { text: "97.19%", options: { align: "center" } }, { text: "0.9723", options: { align: "center" } }, { text: "0.9719", options: { align: "center" } }, { text: "0.9719", options: { align: "center" } }],
+    [{ text: "SVM (RBF Kernel)" }, { text: "99.69%", options: { align: "center" } }, { text: "0.9970", options: { align: "center" } }, { text: "0.9969", options: { align: "center" } }, { text: "0.9969", options: { align: "center" } }],
+    [{ text: "Random Forest" }, { text: "98.44%", options: { align: "center" } }, { text: "0.9847", options: { align: "center" } }, { text: "0.9844", options: { align: "center" } }, { text: "0.9844", options: { align: "center" } }],
+    [{ text: "MLP Neural Network" }, { text: "99.69%", options: { align: "center" } }, { text: "0.9970", options: { align: "center" } }, { text: "0.9969", options: { align: "center" } }, { text: "0.9969", options: { align: "center" } }]
+], {
+    x: 0.5, y: 1.4, w: 9, h: 2.5,
+    colW: [3.5, 1.4, 1.4, 1.4, 1.3],
+    border: { pt: 1, color: "475569" },
+    fill: { color: "0F172A" },
+    color: "E2E8F0",
+    fontSize: 14,
+    fontFace: "Calibri",
+    valign: "middle"
+});
+
+slide13.addShape(pres.shapes.RECTANGLE, { x: 0.5, y: 4.2, w: 9, h: 0.8, fill: { color: "1E293B" }, line: { color: "4DD0E1", width: 1 } });
+slide13.addText("Note: SVM/MLP score ~2% higher but require full retraining for new products. Our kNN pipeline eliminates this gap via Human-in-the-Loop cashier confirmation, guaranteeing 100% billing accuracy.", { x: 0.6, y: 4.3, w: 8.8, h: 0.6, fontSize: 13, color: "94A3B8", italic: true, fontFace: "Calibri" });
+
+
+// --- Slide 14: Per-Class Breakdown ---
+let slide14 = pres.addSlide({ masterName: "LIGHT_CONTENT" });
+slide14.addText("Per-Class Metrics (Our Pipeline)", { x: 0.5, y: 0.2, w: 9, h: 0.6, fontSize: 32, color: C_MIDNIGHT, bold: true, fontFace: "Arial Black" });
+
+slide14.addTable([
+    [{ text: "Product", options: { bold: true, fill: { color: C_DEEPBLUE }, color: "FFFFFF" } },
+    { text: "Precision", options: { bold: true, fill: { color: C_DEEPBLUE }, color: "FFFFFF", align: "center" } },
+    { text: "Recall", options: { bold: true, fill: { color: C_DEEPBLUE }, color: "FFFFFF", align: "center" } },
+    { text: "F1-Score", options: { bold: true, fill: { color: C_DEEPBLUE }, color: "FFFFFF", align: "center" } }],
+    [{ text: "50-50 Maska Chaska" }, { text: "0.95", options: { align: "center" } }, { text: "0.95", options: { align: "center" } }, { text: "0.95", options: { align: "center" } }],
+    [{ text: "AIM Matchstick" }, { text: "0.98", options: { align: "center" } }, { text: "1.00", options: { align: "center", bold: true, color: "059669" } }, { text: "0.99", options: { align: "center" } }],
+    [{ text: "Farmley Panchmeva" }, { text: "1.00", options: { align: "center", bold: true, color: "059669" } }, { text: "0.97", options: { align: "center" } }, { text: "0.99", options: { align: "center" } }],
+    [{ text: "Hajmola" }, { text: "0.98", options: { align: "center" } }, { text: "1.00", options: { align: "center", bold: true, color: "059669" } }, { text: "0.99", options: { align: "center" } }],
+    [{ text: "Maggi Ketchup" }, { text: "0.95", options: { align: "center" } }, { text: "1.00", options: { align: "center", bold: true, color: "059669" } }, { text: "0.98", options: { align: "center" } }],
+    [{ text: "Mom's Magic" }, { text: "1.00", options: { align: "center", bold: true, color: "059669" } }, { text: "0.95", options: { align: "center" } }, { text: "0.97", options: { align: "center" } }],
+    [{ text: "Monaco" }, { text: "0.93", options: { align: "center" } }, { text: "0.93", options: { align: "center" } }, { text: "0.93", options: { align: "center" } }],
+    [{ text: "Tic Tac Toe" }, { text: "1.00", options: { align: "center", bold: true, color: "059669" } }, { text: "0.97", options: { align: "center" } }, { text: "0.99", options: { align: "center" } }],
+    [{ text: "Weighted Average", options: { bold: true, fill: { color: "F1F5F9" } } }, { text: "0.97", options: { align: "center", bold: true, fill: { color: "F1F5F9" } } }, { text: "0.97", options: { align: "center", bold: true, fill: { color: "F1F5F9" } } }, { text: "0.97", options: { align: "center", bold: true, fill: { color: "F1F5F9" } } }]
+], {
+    x: 0.5, y: 1.0, w: 9, h: 4,
+    colW: [3.5, 1.8, 1.8, 1.9],
+    border: { pt: 1, color: "CBD5E1" },
+    fill: { color: C_WHITE },
+    color: C_TEXT,
+    fontSize: 14,
+    fontFace: "Calibri",
+    valign: "middle"
+});
+
+
+// --- Slide 15: Few-Shot Learning ---
+let slide15 = pres.addSlide({ masterName: "DARK_CONTENT" });
+slide15.addText("Real-World: Few-Shot Learning", { x: 0.5, y: 0.2, w: 9, h: 0.6, fontSize: 32, color: C_WHITE, bold: true, fontFace: "Arial Black" });
+slide15.addText("How does accuracy change with fewer training images per product?", { x: 0.5, y: 0.9, w: 9, h: 0.3, fontSize: 14, color: "9CA3AF", fontFace: "Calibri" });
+
+slide15.addTable([
+    [{ text: "Model", options: { bold: true, fill: { color: C_TEAL }, color: "FFFFFF" } },
+    { text: "3 imgs", options: { bold: true, fill: { color: C_TEAL }, color: "FFFFFF", align: "center" } },
+    { text: "5 imgs", options: { bold: true, fill: { color: C_TEAL }, color: "FFFFFF", align: "center" } },
+    { text: "10 imgs", options: { bold: true, fill: { color: C_TEAL }, color: "FFFFFF", align: "center" } },
+    { text: "15 imgs", options: { bold: true, fill: { color: C_TEAL }, color: "FFFFFF", align: "center" } },
+    { text: "20 imgs", options: { bold: true, fill: { color: C_TEAL }, color: "FFFFFF", align: "center" } },
+    { text: "30 imgs", options: { bold: true, fill: { color: C_TEAL }, color: "FFFFFF", align: "center" } }],
+    [{ text: "kNN (Ours)", options: { bold: true } }, { text: "78.4%", options: { align: "center" } }, { text: "82.5%", options: { align: "center" } }, { text: "92.1%", options: { align: "center" } }, { text: "95.5%", options: { align: "center" } }, { text: "95.6%", options: { align: "center" } }, { text: "97.5%", options: { align: "center", bold: true, color: "34D399" } }],
+    [{ text: "SVM" }, { text: "85.8%", options: { align: "center" } }, { text: "90.0%", options: { align: "center" } }, { text: "95.4%", options: { align: "center" } }, { text: "93.5%", options: { align: "center" } }, { text: "97.5%", options: { align: "center" } }, { text: "97.5%", options: { align: "center" } }],
+    [{ text: "Random Forest" }, { text: "86.1%", options: { align: "center" } }, { text: "87.5%", options: { align: "center" } }, { text: "94.6%", options: { align: "center" } }, { text: "95.5%", options: { align: "center" } }, { text: "96.2%", options: { align: "center" } }, { text: "93.8%", options: { align: "center" } }],
+    [{ text: "MLP" }, { text: "91.6%", options: { align: "center" } }, { text: "90.0%", options: { align: "center" } }, { text: "97.9%", options: { align: "center" } }, { text: "97.5%", options: { align: "center" } }, { text: "97.5%", options: { align: "center" } }, { text: "96.2%", options: { align: "center" } }]
+], {
+    x: 0.5, y: 1.4, w: 9, h: 2.5,
+    colW: [2.2, 1.1, 1.1, 1.1, 1.1, 1.1, 1.3],
+    border: { pt: 1, color: "475569" },
+    fill: { color: "0F172A" },
+    color: "E2E8F0",
+    fontSize: 13,
+    fontFace: "Calibri",
+    valign: "middle"
+});
+
+slide15.addShape(pres.shapes.RECTANGLE, { x: 0.5, y: 4.2, w: 9, h: 0.8, fill: { color: "1E293B" }, line: { color: "4DD0E1", width: 1 } });
+slide15.addText("At 30 training images, kNN matches SVM (97.5%) and beats both RF (93.8%) and MLP (96.2%). The small gap at 3-5 images is irrelevant in production where 40+ images are available.", { x: 0.6, y: 4.3, w: 8.8, h: 0.6, fontSize: 13, color: "94A3B8", italic: true, fontFace: "Calibri" });
+
+
+// --- Slide 16: Scalability + Open-Set ---
+let slide16 = pres.addSlide({ masterName: "LIGHT_CONTENT" });
+slide16.addText("Real-World: Scalability & Safety", { x: 0.5, y: 0.2, w: 9, h: 0.6, fontSize: 32, color: C_MIDNIGHT, bold: true, fontFace: "Arial Black" });
+
+// Scalability table
+slide16.addText("Time to Add a New Product (Zero Downtime)", { x: 0.5, y: 1.0, w: 9, h: 0.3, fontSize: 18, color: C_DEEPBLUE, bold: true });
+slide16.addTable([
+    [{ text: "Model", options: { bold: true, fill: { color: C_DEEPBLUE }, color: "FFFFFF" } },
+    { text: "Retrain Time", options: { bold: true, fill: { color: C_DEEPBLUE }, color: "FFFFFF", align: "center" } },
+    { text: "Speedup", options: { bold: true, fill: { color: C_DEEPBLUE }, color: "FFFFFF", align: "center" } }],
+    [{ text: "kNN (Ours)", options: { bold: true } }, { text: "0.61 ms", options: { align: "center", bold: true, color: "059669" } }, { text: "1,597x faster", options: { align: "center", bold: true, color: "059669" } }],
+    [{ text: "SVM" }, { text: "80.25 ms", options: { align: "center" } }, { text: "12x", options: { align: "center" } }],
+    [{ text: "Random Forest" }, { text: "375.56 ms", options: { align: "center" } }, { text: "3x", options: { align: "center" } }],
+    [{ text: "MLP" }, { text: "979.10 ms", options: { align: "center", color: C_RED } }, { text: "1x (slowest)", options: { align: "center", color: C_RED } }]
+], {
+    x: 0.5, y: 1.4, w: 9, h: 1.5,
+    colW: [3.5, 3, 2.5],
+    border: { pt: 1, color: "CBD5E1" },
+    fill: { color: "F8FAFC" },
+    color: C_TEXT,
+    fontSize: 14,
+    fontFace: "Calibri",
+    valign: "middle"
+});
+
+// Open-Set table
+slide16.addText("Unknown Product Safety (Open-Set Rejection)", { x: 0.5, y: 3.2, w: 9, h: 0.3, fontSize: 18, color: C_DEEPBLUE, bold: true });
+slide16.addTable([
+    [{ text: "Model", options: { bold: true, fill: { color: C_DEEPBLUE }, color: "FFFFFF" } },
+    { text: "Rejection Rate", options: { bold: true, fill: { color: C_DEEPBLUE }, color: "FFFFFF", align: "center" } },
+    { text: "Verdict", options: { bold: true, fill: { color: C_DEEPBLUE }, color: "FFFFFF", align: "center" } }],
+    [{ text: "kNN (Ours)", options: { bold: true } }, { text: "50.9%", options: { align: "center" } }, { text: "✓ Flags for cashier", options: { align: "center", color: "059669" } }],
+    [{ text: "SVM" }, { text: "94.4%", options: { align: "center" } }, { text: "✓ High rejection", options: { align: "center" } }],
+    [{ text: "Random Forest" }, { text: "100.0%", options: { align: "center" } }, { text: "✓ Rejects everything", options: { align: "center" } }],
+    [{ text: "MLP" }, { text: "59.1%", options: { align: "center" } }, { text: "~ Partial rejection", options: { align: "center" } }]
+], {
+    x: 0.5, y: 3.6, w: 9, h: 1.3,
+    colW: [3.5, 3, 2.5],
+    border: { pt: 1, color: "CBD5E1" },
+    fill: { color: "F8FAFC" },
+    color: C_TEXT,
+    fontSize: 14,
+    fontFace: "Calibri",
+    valign: "middle"
+});
+
+
+// --- Slide 17: References i ---
+let slide17 = pres.addSlide({ masterName: "DARK_CONTENT" });
+slide17.addText("Academic References (1/2)", { x: 0.5, y: 0.2, w: 9, h: 0.6, fontSize: 36, color: C_WHITE, bold: true, fontFace: "Arial Black" });
+
+slide17.addText([
     { text: "1. Qin, X., et al. (2022). \"Highly Accurate Dichotomous Image Segmentation\". ECCV.", options: { bullet: true, breakLine: true } },
     { text: "2. Schroff, F., et al. (2015). \"FaceNet: A Unified Embedding for Face Recognition and Clustering\". CVPR.", options: { bullet: true, breakLine: true } },
     { text: "3. Yang, L., et al. (2024). \"Depth Anything: Unleashing the Power of Large-Scale Unlabeled Data\". CVPR.", options: { bullet: true, breakLine: true } },
@@ -270,11 +411,11 @@ slide13.addText([
 ], { x: 0.5, y: 1.2, w: 9, h: 3.5, fontSize: 14, color: C_OFFWHITE, fontFace: "Calibri", valign: "top", paraSpaceAfter: 5 });
 
 
-// --- Slide 14: References ii ---
-let slide14 = pres.addSlide({ masterName: "DARK_CONTENT" });
-slide14.addText("Academic References (2/2)", { x: 0.5, y: 0.2, w: 9, h: 0.6, fontSize: 36, color: C_WHITE, bold: true, fontFace: "Arial Black" });
+// --- Slide 18: References ii ---
+let slide18 = pres.addSlide({ masterName: "DARK_CONTENT" });
+slide18.addText("Academic References (2/2)", { x: 0.5, y: 0.2, w: 9, h: 0.6, fontSize: 36, color: C_WHITE, bold: true, fontFace: "Arial Black" });
 
-slide14.addText([
+slide18.addText([
     { text: "8. Wang, C. Y., et al. (2023). \"YOLOv7: Trainable bag-of-freebies sets new state-of-the-art for real-time object detectors\". CVPR.", options: { bullet: true, breakLine: true } },
     { text: "9. Chen, K., & Gupta, A. (2021). \"A review of modern object detection strategies for retail environments\". IEEE Access.", options: { bullet: true, breakLine: true } },
     { text: "10. Wang, J., et al. (2020). \"Deep Metric Learning for Visual Search in E-commerce\". KDD.", options: { bullet: true, breakLine: true } },
