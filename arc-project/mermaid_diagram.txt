@@ -1,0 +1,62 @@
+graph TD
+    %% === Class Definitions ===
+    classDef hardware fill:#2b3a42,stroke:#00a8cc,stroke-width:2px,color:#fff;
+    classDef frontend fill:#1a2634,stroke:#64D2FF,stroke-width:2px,color:#fff;
+    classDef backend fill:#2c3e50,stroke:#2ecc71,stroke-width:2px,color:#fff;
+    classDef model fill:#4527a0,stroke:#9c27b0,stroke-width:2px,color:#fff;
+    classDef database fill:#4e342e,stroke:#ff9800,stroke-width:2px,color:#fff;
+
+    %% === Hardware ===
+    Camera["Camera / DroidCam<br/>(Video Stream)"]:::hardware
+
+    %% === Frontend ===
+    subgraph Frontend ["Frontend (Next.js Dashboard)"]
+        UI["3-Column Dashboard UI"]:::frontend
+        VisionMaps["Vision Maps<br/>(Depth & Diagnostics)"]:::frontend
+        Analytics["Detection Analytics<br/>& Cashier Confirmation"]:::frontend
+        Cart["Dynamic Checkout Bill"]:::frontend
+    end
+
+    %% === Backend ===
+    subgraph Backend ["Backend (FastAPI)"]
+        API["REST API Endpoints<br/>(/capture, /depth_map, /reload)"]:::backend
+        SQLite["SQLite Database<br/>(Products & Transactions)"]:::database
+
+        subgraph CVPipeline ["Custom Computer Vision Pipeline"]
+            DetectSplit{"Hybrid Detection Engine"}:::model
+            SegModel["Custom Retail Segmenter<br/>(Dichotomous Segmentation)"]:::model
+            SlidingWin["Sliding Window Scanner<br/>(Small Object Fallback)"]:::model
+            
+            FeatureExtract["Deep Feature Extractor<br/>(Embedding Generation)"]:::model
+            Classifier["Metric Learning Classifier<br/>(kNN Catalog Matching)"]:::model
+            
+            DepthAnalyzer["Monocular Depth Analyzer<br/>(Relative Depth Map)"]:::model
+            VariantResolver["Size & Volume Estimator<br/>(Variant Resolution)"]:::model
+        end
+    end
+
+    %% === Data Flow ===
+    Camera -->|"Live Frame"| API
+    UI -->|"Capture Command"| API
+    API -->|"Frame"| DetectSplit
+    
+    DetectSplit --> SegModel
+    DetectSplit --> SlidingWin
+    SegModel -->|"Masks"| FeatureExtract
+    SlidingWin -->|"BBox Cropping"| FeatureExtract
+    
+    FeatureExtract -->|"Embeddings"| Classifier
+    Classifier -->|"Top-3 Candidates + Confidence"| API
+    
+    API -->|"Raw Frame"| DepthAnalyzer
+    DepthAnalyzer -->|"Depth Map"| VariantResolver
+    VariantResolver -->|"Volume & Size category"| API
+    
+    API <-->|"Fetch/Update Product Catalog"| SQLite
+    
+    API -->|"Rich Analytics Response"| UI
+    UI -->|"Update Maps"| VisionMaps
+    UI -->|"Handle Ambiguity"| Analytics
+    Analytics -.->|"Cashier Resolves"| Cart
+    UI -->|"Auto-Add High Confidence"| Cart
+    Cart -->|"Checkout & Store"| API
