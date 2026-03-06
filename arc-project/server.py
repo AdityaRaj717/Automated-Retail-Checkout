@@ -349,10 +349,9 @@ def capture():
 
     detections = detector.capture(frame)
 
-    # Run depth estimation + occlusion map
+    # Run depth estimation
     depth_map = depth_est.estimate_depth(frame)
     depth_est.colorize_depth(depth_map)
-    depth_est.generate_occlusion_map(frame, depth_map)
 
     # Enrich detections with product info, depth metrics, and variants
     results = []
