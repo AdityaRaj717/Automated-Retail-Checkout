@@ -243,19 +243,46 @@ class DepthEstimator:
         # Average over all directions
         total_occlusion = total_occlusion / n_dirs
 
+        # ── Table-plane contact shadows ─────────────────────────────
+        # Detect the table surface (dominant depth) and darken the
+        # transition zone where objects meet the table.
+        # The table is the largest flat area → mode of the depth histogram
+        hist, bin_edges = np.histogram(depth_smooth.ravel(), bins=64)
+        table_bin = np.argmax(hist)
+        table_depth = (bin_edges[table_bin] + bin_edges[table_bin + 1]) / 2.0
+
+        # Distance from table depth — objects are closer (lower depth)
+        depth_from_table = np.abs(depth_smooth - table_depth)
+
+        # Contact zone: pixels near the table depth that are also near
+        # a depth gradient (i.e., at the edge between object and table)
+        grad_mag = np.sqrt(dzdx ** 2 + dzdy ** 2)
+
+        # Transition band: within 0.08 of table depth AND has gradient
+        near_table = depth_from_table < 0.10
+        has_gradient = grad_mag > np.percentile(grad_mag, 70)
+        contact_mask = (near_table & has_gradient).astype(np.float32)
+
+        # Dilate the contact mask to spread the shadow slightly
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
+        contact_spread = cv2.dilate(contact_mask, kernel, iterations=2)
+
+        # Smooth falloff
+        contact_shadow = cv2.GaussianBlur(contact_spread, (11, 11), 3.0)
+        contact_shadow = np.clip(contact_shadow * 0.7, 0, 1)
+
         # ── Cavity boost (Laplacian) ───────────────────────────────
-        # Subtle extra darkening in true concavities
         laplacian = cv2.Laplacian(depth_smooth, cv2.CV_32F, ksize=5)
-        cavity = np.clip(laplacian * 3.0, 0, 1) * 0.3
+        cavity = np.clip(laplacian * 4.0, 0, 1) * 0.3
 
         # ── Combine ───────────────────────────────────────────────
-        ao = np.clip(total_occlusion + cavity, 0, 1)
+        ao = np.clip(total_occlusion * 0.6 + contact_shadow + cavity, 0, 1)
 
         # Invert: 0 = fully occluded (black), 1 = exposed (white)
         ao_bright = 1.0 - ao
 
-        # Slight contrast
-        ao_bright = np.clip(ao_bright * 1.2 - 0.1, 0, 1)
+        # Contrast
+        ao_bright = np.clip(ao_bright * 1.3 - 0.15, 0, 1)
 
         ao_uint8 = (ao_bright * 255).astype(np.uint8)
 
