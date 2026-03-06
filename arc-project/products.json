@@ -9,7 +9,7 @@
     },
     "farmley_panchmeva": {
         "name": "Farmley Panchmeva Mix",
-        "price": 275
+        "price": 375
     },
     "hajmola": {
         "name": "Hajmola Regular",
@@ -28,7 +28,7 @@
         "price": 35
     },
     "tic_tac_toe": {
-        "name": "Parle Tic Tac Toe",
+        "name": "Tic Tac Toe",
         "price": 20
     }
 }

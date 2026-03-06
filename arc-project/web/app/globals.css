@@ -40,7 +40,8 @@
   box-sizing: border-box;
 }
 
-html, body {
+html,
+body {
   height: 100%;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   background: var(--bg-primary);
@@ -49,8 +50,14 @@ html, body {
 }
 
 /* Scrollbar */
-::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
 ::-webkit-scrollbar-thumb {
   background: var(--text-muted);
   border-radius: 3px;
@@ -102,8 +109,14 @@ html, body {
   animation: pulse-dot 2s ease-in-out infinite;
 }
 
-.status-dot.connected { background: var(--green); box-shadow: 0 0 8px var(--green-glow); }
-.status-dot.disconnected { background: var(--red); }
+.status-dot.connected {
+  background: var(--green);
+  box-shadow: 0 0 8px var(--green-glow);
+}
+
+.status-dot.disconnected {
+  background: var(--red);
+}
 
 .status-badge {
   display: flex;
@@ -118,8 +131,15 @@ html, body {
 }
 
 @keyframes pulse-dot {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.4;
+  }
 }
 
 /* ── Main Grid ───────────────────────────────────────────────────── */
@@ -184,6 +204,25 @@ html, body {
   color: var(--red);
 }
 
+.camera-badge.debug {
+  color: var(--green);
+  border-color: rgba(16, 185, 129, 0.3);
+  background: rgba(16, 185, 129, 0.15);
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+/* Debug toggle button */
+.btn-debug-toggle {
+  padding: 12px 20px;
+}
+
+.btn-debug-toggle.active {
+  background: rgba(16, 185, 129, 0.15);
+  border-color: var(--green);
+  color: var(--green);
+  box-shadow: 0 0 16px var(--green-glow);
+}
+
 .camera-controls {
   display: flex;
   gap: 10px;
@@ -241,10 +280,22 @@ html, body {
 }
 
 @keyframes capture-pulse {
-  0% { transform: scale(1); }
-  30% { transform: scale(0.97); }
-  60% { transform: scale(1.02); box-shadow: 0 0 40px var(--accent-glow); }
-  100% { transform: scale(1); }
+  0% {
+    transform: scale(1);
+  }
+
+  30% {
+    transform: scale(0.97);
+  }
+
+  60% {
+    transform: scale(1.02);
+    box-shadow: 0 0 40px var(--accent-glow);
+  }
+
+  100% {
+    transform: scale(1);
+  }
 }
 
 .btn-bg-reset {
@@ -374,8 +425,15 @@ html, body {
 }
 
 @keyframes item-slide-in {
-  from { opacity: 0; transform: translateX(20px); }
-  to { opacity: 1; transform: translateX(0); }
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 .bill-item:hover {
@@ -572,13 +630,27 @@ html, body {
 }
 
 @keyframes toast-in {
-  from { transform: translateX(-50%) translateY(100px); opacity: 0; }
-  to { transform: translateX(-50%) translateY(0); opacity: 1; }
+  from {
+    transform: translateX(-50%) translateY(100px);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateX(-50%) translateY(0);
+    opacity: 1;
+  }
 }
 
 @keyframes toast-out {
-  from { transform: translateX(-50%) translateY(0); opacity: 1; }
-  to { transform: translateX(-50%) translateY(100px); opacity: 0; }
+  from {
+    transform: translateX(-50%) translateY(0);
+    opacity: 1;
+  }
+
+  to {
+    transform: translateX(-50%) translateY(100px);
+    opacity: 0;
+  }
 }
 
 /* ── Capture Flash ───────────────────────────────────────────────── */
@@ -594,8 +666,13 @@ html, body {
 }
 
 @keyframes flash {
-  0% { opacity: 0.8; }
-  100% { opacity: 0; }
+  0% {
+    opacity: 0.8;
+  }
+
+  100% {
+    opacity: 0;
+  }
 }
 
 /* ── Detection overlay ───────────────────────────────────────────── */
@@ -616,8 +693,15 @@ html, body {
 }
 
 @keyframes badge-pop {
-  0% { transform: scale(0.8); opacity: 0; }
-  100% { transform: scale(1); opacity: 1; }
+  0% {
+    transform: scale(0.8);
+    opacity: 0;
+  }
+
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 
 /* ── Camera No Connection ────────────────────────────────────────── */

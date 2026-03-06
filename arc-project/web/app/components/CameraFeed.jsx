@@ -11,6 +11,7 @@ export default function CameraFeed({
     onResetBackground,
 }) {
     const [showFlash, setShowFlash] = useState(false);
+    const [debugMode, setDebugMode] = useState(false);
 
     const handleCapture = () => {
         setShowFlash(true);
@@ -18,13 +19,17 @@ export default function CameraFeed({
         onCapture();
     };
 
+    const feedUrl = debugMode
+        ? `${apiUrl}/video_feed_debug`
+        : `${apiUrl}/video_feed`;
+
     return (
         <section className="camera-panel">
             <div className="camera-feed-wrapper">
                 {cameraConnected ? (
                     <>
                         <img
-                            src={`${apiUrl}/video_feed`}
+                            src={feedUrl}
                             alt="Live camera feed"
                             draggable={false}
                         />
@@ -32,6 +37,9 @@ export default function CameraFeed({
                         {/* Overlay badges */}
                         <div className="camera-overlay">
                             <span className="camera-badge live">● LIVE</span>
+                            {debugMode && (
+                                <span className="camera-badge debug">⬡ DETECT</span>
+                            )}
                             <span className="camera-badge">DroidCam</span>
                         </div>
 
@@ -69,6 +77,15 @@ export default function CameraFeed({
                     <span className="btn-icon">📸</span>
                     {isCapturing ? "Detecting..." : "Capture"}
                     <span className="shortcut-hint">[SPACE]</span>
+                </button>
+                <button
+                    className={`btn btn-debug-toggle ${debugMode ? "active" : ""}`}
+                    onClick={() => setDebugMode((d) => !d)}
+                    disabled={!cameraConnected}
+                    title="Toggle live object detection overlay"
+                >
+                    <span className="btn-icon">🔍</span>
+                    {debugMode ? "Debug ON" : "Debug"}
                 </button>
                 <button
                     className="btn btn-bg-reset"

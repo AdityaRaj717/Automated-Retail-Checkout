@@ -172,6 +172,85 @@ def video_feed():
     )
 
 
+def _draw_detections(frame, detections):
+    """Draw bounding boxes and labels on a frame."""
+    for det in detections:
+        x, y, w, h = det["bbox"]
+        label = det["label"]
+        conf = det["confidence"]
+
+        # Draw filled rectangle behind text
+        text = f"{label} {conf:.0%}"
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        font_scale = 0.6
+        thickness = 2
+        (tw, th), baseline = cv2.getTextSize(text, font, font_scale, thickness)
+
+        # Bounding box — green
+        cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+
+        # Label background
+        cv2.rectangle(frame, (x, y - th - 10), (x + tw + 6, y), (0, 255, 0), -1)
+
+        # Label text — dark
+        cv2.putText(frame, text, (x + 3, y - 6), font, font_scale, (0, 0, 0), thickness)
+
+    return frame
+
+
+@app.get("/video_feed_debug")
+def video_feed_debug():
+    """
+    MJPEG stream with live bounding boxes drawn on detected products.
+    Detection runs at a throttled rate (~2 Hz) to keep CPU usage reasonable.
+    """
+    def generate():
+        last_detections = []
+        last_detect_time = 0
+        detect_interval = 0.5  # Run detection every 500ms
+
+        while True:
+            frame = camera.get_frame()
+            if frame is None:
+                time.sleep(0.05)
+                continue
+
+            now = time.time()
+            if now - last_detect_time >= detect_interval:
+                try:
+                    raw_dets = detector.capture(frame)
+
+                    # Enrich with product names from DB
+                    enriched = []
+                    for det in raw_dets:
+                        product = db.get_product_by_slug(det["label"])
+                        name = product["name"] if product else det["label"]
+                        enriched.append({
+                            "label": name,
+                            "confidence": det["confidence"],
+                            "bbox": det["bbox"],
+                        })
+                    last_detections = enriched
+                except Exception:
+                    pass  # Keep last known detections on error
+                last_detect_time = now
+
+            # Draw detections on the frame
+            annotated = _draw_detections(frame.copy(), last_detections)
+
+            _, jpeg = cv2.imencode('.jpg', annotated, [cv2.IMWRITE_JPEG_QUALITY, 70])
+            yield (
+                b'--frame\r\n'
+                b'Content-Type: image/jpeg\r\n\r\n' + jpeg.tobytes() + b'\r\n'
+            )
+            time.sleep(0.033)  # ~30 fps
+
+    return StreamingResponse(
+        generate(),
+        media_type="multipart/x-mixed-replace; boundary=frame",
+    )
+
+
 @app.post("/capture")
 def capture():
     """
