@@ -61,6 +61,8 @@ class CameraManager:
         while self.running:
             ret, frame = self.cap.read()
             if ret:
+                # Rotate 180° — DroidCam feed is upside down
+                frame = cv2.flip(frame, -1)
                 with self.lock:
                     self.latest_frame = frame
             else:

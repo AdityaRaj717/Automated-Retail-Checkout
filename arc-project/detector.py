@@ -29,7 +29,7 @@ from rembg import new_session, remove
 
 # ── Config ──────────────────────────────────────────────────────────────────
 EMBEDDINGS_FILE = os.path.join(os.path.dirname(__file__), "embeddings.pkl")
-MIN_CONTOUR_AREA = 5000       # Minimum pixel area to consider as a product
+MIN_CONTOUR_AREA = 2000       # Minimum pixel area to consider as a product
 MAX_CONTOUR_AREA = 80000      # Above this, try to split (likely merged products)
 CONFIDENCE_THRESHOLD = 0.55   # Minimum confidence to accept a classification
 KNN_NEIGHBORS = 5             # Number of neighbors for kNN
@@ -95,21 +95,20 @@ class ProductDetector:
         Use rembg (U2-Net) to produce a foreground mask.
         Returns a binary mask (0/255) where 255 = foreground object.
         """
-        # rembg expects a PIL image or numpy BGR
-        # It returns an RGBA image with transparent background
         pil_in = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
         pil_out = remove(pil_in, session=self.rembg_session)
 
         # Extract alpha channel as the foreground mask
         alpha = np.array(pil_out)[:, :, 3]
 
-        # Threshold the alpha channel (rembg can produce soft edges)
-        _, mask = cv2.threshold(alpha, 128, 255, cv2.THRESH_BINARY)
+        # Low threshold to catch distant/faint objects
+        _, mask = cv2.threshold(alpha, 50, 255, cv2.THRESH_BINARY)
 
-        # Light morphological cleanup
-        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
-        mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=2)
-        mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel, iterations=1)
+        # OPEN to remove small noise, then ERODE to separate touching products
+        kernel_small = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+        kernel_sep = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (9, 9))
+        mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel_small, iterations=2)
+        mask = cv2.erode(mask, kernel_sep, iterations=3)
 
         return mask
 
@@ -153,6 +152,8 @@ class ProductDetector:
     def _classify_contours(self, frame, mask, contours):
         """Classify each contour region and return detections."""
         detections = []
+        # Padding compensates for erosion shrinkage in _segment_frame
+        pad = 30
 
         for contour in contours:
             area = cv2.contourArea(contour)
@@ -167,7 +168,6 @@ class ProductDetector:
                 split_bboxes = self._split_contour(roi, x, y)
                 if split_bboxes:
                     for sx, sy, sw, sh in split_bboxes:
-                        pad = 10
                         sx1 = max(0, sx - pad)
                         sy1 = max(0, sy - pad)
                         sx2 = min(frame.shape[1], sx + sw + pad)
@@ -184,12 +184,11 @@ class ProductDetector:
                             detections.append({
                                 "label": label,
                                 "confidence": float(confidence),
-                                "bbox": (sx, sy, sw, sh),
+                                "bbox": (sx1, sy1, sx2 - sx1, sy2 - sy1),
                             })
                     continue
 
-            # Normal single-product contour
-            pad = 10
+            # Normal single-product contour — expand bbox to recover erosion
             x1 = max(0, x - pad)
             y1 = max(0, y - pad)
             x2 = min(frame.shape[1], x + w + pad)
@@ -209,7 +208,7 @@ class ProductDetector:
                 detections.append({
                     "label": label,
                     "confidence": float(confidence),
-                    "bbox": (x, y, w, h),
+                    "bbox": (x1, y1, x2 - x1, y2 - y1),
                 })
 
         # Deduplicate: keep highest confidence per label
