@@ -151,5 +151,39 @@ def get_transactions(limit: int = 20):
     return result
 
 
+def sync_products():
+    """Upsert products from products.json into the database.
+    New products are inserted, existing ones get name/price updated."""
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    with open(PRODUCTS_FILE, "r") as f:
+        catalog = json.load(f)
+
+    for slug, info in catalog.items():
+        # Count images in processed dataset
+        img_dir = os.path.join(os.path.dirname(__file__), "dataset", "processed", slug)
+        img_count = len(os.listdir(img_dir)) if os.path.isdir(img_dir) else 0
+
+        existing = cursor.execute(
+            "SELECT id FROM products WHERE slug = ?", (slug,)
+        ).fetchone()
+
+        if existing:
+            cursor.execute(
+                "UPDATE products SET name = ?, price = ?, image_count = ? WHERE slug = ?",
+                (info["name"], info["price"], img_count, slug),
+            )
+        else:
+            cursor.execute(
+                "INSERT INTO products (slug, name, price, image_count) VALUES (?, ?, ?, ?)",
+                (slug, info["name"], info["price"], img_count),
+            )
+
+    conn.commit()
+    conn.close()
+    print(f"Synced {len(catalog)} products from products.json")
+
+
 # Initialize on import
 init_db()

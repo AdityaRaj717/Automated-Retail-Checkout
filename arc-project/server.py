@@ -10,6 +10,7 @@ Usage:
 
 import os
 import io
+import json
 import time
 import threading
 from collections import deque
@@ -24,6 +25,7 @@ from pydantic import BaseModel
 
 import database as db
 from detector import ProductDetector
+from depth_estimator import DepthEstimator
 
 # ── Config ──────────────────────────────────────────────────────────────────
 DROIDCAM_URL = "http://10.91.13.197:4747/video"
@@ -85,12 +87,47 @@ class CameraManager:
 # ── Globals ─────────────────────────────────────────────────────────────────
 camera = CameraManager(DROIDCAM_URL)
 detector = None
+depth_est = None
+
+PRODUCTS_FILE = os.path.join(os.path.dirname(__file__), "products.json")
+
+
+def _load_products_json():
+    """Load products.json for variant resolution."""
+    with open(PRODUCTS_FILE, "r") as f:
+        return json.load(f)
+
+
+def _resolve_variant(product_info, slug, metrics):
+    """Resolve size variant using depth/volume metrics."""
+    catalog = _load_products_json()
+    if slug not in catalog:
+        return product_info
+
+    entry = catalog[slug]
+    variants = entry.get("variants")
+    if not variants:
+        return product_info
+
+    volume = metrics.get("estimated_volume", 0)
+    for v in variants:
+        min_vol = v.get("min_volume", 0)
+        max_vol = v.get("max_volume", float("inf"))
+        if min_vol <= volume <= max_vol:
+            return {
+                **product_info,
+                "name": v["name"],
+                "price": v["price"],
+                "variant_resolved": True,
+            }
+
+    return product_info
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown events."""
-    global detector
+    global detector, depth_est
     print("=" * 50)
     print("  Retail Checkout System — API Server")
     print("=" * 50)
@@ -100,6 +137,11 @@ async def lifespan(app: FastAPI):
     print("Loading product detector...")
     detector = ProductDetector()
     print("Detector ready!")
+
+    # Initialize depth estimator
+    print("Loading depth estimator...")
+    depth_est = DepthEstimator()
+    print("Depth estimator ready!")
 
     # Start camera
     print(f"Connecting to DroidCam: {DROIDCAM_URL}")
@@ -298,9 +340,8 @@ def video_feed_debug():
 @app.post("/capture")
 def capture():
     """
-    Capture the current frame and run product detection using
-    rembg (U2-Net) segmentation + kNN classification.
-    Returns detected products with confidence scores.
+    Capture frame → detect products → estimate depth → resolve variants.
+    Returns rich analytics: depth metrics, candidates, confirmation flags.
     """
     frame = camera.get_frame()
     if frame is None:
@@ -308,18 +349,82 @@ def capture():
 
     detections = detector.capture(frame)
 
-    # Enrich detections with product info from DB
+    # Run depth estimation + occlusion map
+    depth_map = depth_est.estimate_depth(frame)
+    depth_est.colorize_depth(depth_map)
+    depth_est.generate_occlusion_map(frame, depth_map)
+
+    # Enrich detections with product info, depth metrics, and variants
     results = []
     for det in detections:
         product = db.get_product_by_slug(det["label"])
-        if product:
-            results.append({
-                "product": product,
-                "confidence": det["confidence"],
-                "bbox": det["bbox"],
+        if not product:
+            continue
+
+        # Depth metrics for this product
+        metrics = depth_est.get_object_metrics(depth_map, det["bbox"])
+
+        # Console log
+        print(f"  [DEPTH] {product['name']}: depth={metrics['mean_depth']:.1f}, "
+              f"volume={metrics['estimated_volume']:.0f}, "
+              f"size={metrics['size_category']}")
+
+        # Resolve size variant if applicable
+        resolved_product = _resolve_variant(product, det["label"], metrics)
+
+        # Build candidates list with product names
+        candidates = []
+        for c in det.get("candidates", []):
+            c_product = db.get_product_by_slug(c["label"])
+            candidates.append({
+                "slug": c["label"],
+                "name": c_product["name"] if c_product else c["label"],
+                "confidence": c["confidence"],
+                "price": c_product["price"] if c_product else 0,
             })
 
-    return {"detections": results, "count": len(results)}
+        results.append({
+            "product": resolved_product,
+            "confidence": det["confidence"],
+            "bbox": det["bbox"],
+            "depth_metrics": metrics,
+            "candidates": candidates,
+            "needs_confirmation": det.get("needs_confirmation", False),
+        })
+
+    return {
+        "detections": results,
+        "count": len(results),
+        "has_depth_map": True,
+    }
+
+
+@app.get("/depth_map")
+def get_depth_map():
+    """Return the latest colorized depth map as JPEG."""
+    colorized = depth_est.get_last_colorized() if depth_est else None
+    if colorized is None:
+        raise HTTPException(status_code=404, detail="No depth map available yet. Run /capture first.")
+
+    _, jpeg = cv2.imencode('.jpg', colorized, [cv2.IMWRITE_JPEG_QUALITY, 85])
+    return StreamingResponse(
+        io.BytesIO(jpeg.tobytes()),
+        media_type="image/jpeg",
+    )
+
+
+@app.get("/occlusion_map")
+def get_occlusion_map():
+    """Return the latest occlusion boundary map as JPEG."""
+    occ = depth_est.get_last_occlusion() if depth_est else None
+    if occ is None:
+        raise HTTPException(status_code=404, detail="No occlusion map available yet. Run /capture first.")
+
+    _, jpeg = cv2.imencode('.jpg', occ, [cv2.IMWRITE_JPEG_QUALITY, 85])
+    return StreamingResponse(
+        io.BytesIO(jpeg.tobytes()),
+        media_type="image/jpeg",
+    )
 
 
 @app.post("/set_background")
@@ -331,6 +436,27 @@ def set_background():
 
     detector.set_background(frame)
     return {"status": "ok", "message": "Background reference updated"}
+
+
+@app.post("/reload")
+def reload_products():
+    """
+    Hot-reload: rebuild embeddings from dataset, reload kNN classifier,
+    and sync products.json into the database. No restart needed.
+    """
+    import build_embeddings
+
+    print("\n" + "=" * 50)
+    print("  HOT RELOAD — Rebuilding embeddings...")
+    print("=" * 50)
+
+    try:
+        build_embeddings.build()
+        detector.reload_embeddings()
+        db.sync_products()
+        return {"status": "ok", "message": "Embeddings rebuilt and classifier reloaded"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/snapshot")

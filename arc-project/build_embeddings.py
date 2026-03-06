@@ -123,6 +123,10 @@ def extract_embeddings():
     print(f"Product classes: {product_dirs}")
     print(f"Output: {OUTPUT_FILE}")
 
+def build():
+    """Build embeddings — callable from server or CLI."""
+    extract_embeddings()
+
 
 if __name__ == "__main__":
-    extract_embeddings()
+    build()

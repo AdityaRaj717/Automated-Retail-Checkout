@@ -3,10 +3,9 @@ Product Detector
 ================
 Hybrid detection pipeline for reliable retail product identification:
   1. Deep learning segmentation (rembg / ISNet) to find objects
-  2. Sliding window scan as fallback to catch anything segmentation misses
-  3. Embedding-based classification (ResNet18 + kNN) to identify products
-
-Uses batch GPU inference for speed — all tiles processed in one forward pass.
+  2. Sliding window scan (filtered by segmentation mask) as fallback
+  3. Embedding-based classification (ResNet18 + kNN) with top-3 candidates
+  4. Ambiguity detection — flags items needing cashier confirmation
 
 Usage:
     from detector import ProductDetector
@@ -29,28 +28,30 @@ from rembg import new_session, remove
 
 # ── Config ──────────────────────────────────────────────────────────────────
 EMBEDDINGS_FILE = os.path.join(os.path.dirname(__file__), "embeddings.pkl")
-MIN_CONTOUR_AREA = 1500       # Minimum pixel area to consider as a product
-MAX_CONTOUR_AREA = 80000      # Above this, try to split (likely merged products)
-CONFIDENCE_THRESHOLD = 0.55   # Minimum confidence to accept a classification
-KNN_NEIGHBORS = 5             # Number of neighbors for kNN
+MIN_CONTOUR_AREA = 1500
+MAX_CONTOUR_AREA = 80000
+CONFIDENCE_THRESHOLD = 0.45   # Lower threshold — ambiguous items still returned
+AMBIGUITY_BAND = (0.45, 0.70) # If best confidence falls here, flag as ambiguous
+AMBIGUITY_GAP = 0.15          # If top-2 are within this gap, flag as ambiguous
+KNN_NEIGHBORS = 5
 
 # Sliding window config
-TILE_SIZE = 224               # Tile size for sliding window (matches ResNet input)
-TILE_STRIDE = 112             # 50% overlap between tiles
-TILE_CONFIDENCE = 0.75        # Higher threshold for sliding window (more noise)
+TILE_SIZE = 224
+TILE_STRIDE = 112
+TILE_CONFIDENCE = 0.70
+TILE_MASK_OVERLAP = 0.15      # Min fraction of tile that must be foreground
 
 
 class ProductDetector:
     """Detects and classifies retail products in camera frames."""
 
     def __init__(self, embeddings_path: str = EMBEDDINGS_FILE):
-        # ── Load embeddings ─────────────────────────────────────────────
         with open(embeddings_path, "rb") as f:
             data = pickle.load(f)
 
         self.product_names = data["product_names"]
+        self.embeddings_path = embeddings_path
 
-        # ── Train kNN classifier on stored embeddings ───────────────────
         self.knn = KNeighborsClassifier(
             n_neighbors=KNN_NEIGHBORS,
             metric="cosine",
@@ -58,7 +59,7 @@ class ProductDetector:
         )
         self.knn.fit(data["embeddings"], data["labels"])
 
-        # ── Feature extractor (same as build_embeddings.py) ─────────────
+        # Feature extractor
         model = models.resnet18(weights=models.ResNet18_Weights.IMAGENET1K_V1)
         self.feature_model = nn.Sequential(*list(model.children())[:-1])
         self.feature_model.eval()
@@ -73,13 +74,30 @@ class ProductDetector:
                                  std=[0.229, 0.224, 0.225]),
         ])
 
-        # ── Rembg session (ISNet — better for multiple objects) ────────
+        # Rembg (ISNet)
         print("  Loading ISNet segmentation model...")
         self.rembg_session = new_session("isnet-general-use")
         print("  ISNet ready!")
 
-        # ── Legacy ──────────────────────────────────────────────────────
         self._reference_bg = None
+
+    # ── Reload ──────────────────────────────────────────────────────────
+
+    def reload_embeddings(self):
+        """Hot-reload embeddings from disk and rebuild kNN."""
+        print("  Reloading embeddings from disk...")
+        with open(self.embeddings_path, "rb") as f:
+            data = pickle.load(f)
+
+        self.product_names = data["product_names"]
+        self.knn = KNeighborsClassifier(
+            n_neighbors=KNN_NEIGHBORS,
+            metric="cosine",
+            weights="distance",
+        )
+        self.knn.fit(data["embeddings"], data["labels"])
+        print(f"  Reloaded: {len(self.product_names)} products, "
+              f"{data['embeddings'].shape[0]} embeddings")
 
     # ── Embedding Extraction ────────────────────────────────────────────
 
@@ -97,7 +115,7 @@ class ProductDetector:
         return features.cpu().numpy()
 
     def _extract_embeddings_batch(self, crops_bgr: list) -> np.ndarray:
-        """Extract embeddings for a batch of BGR crops (GPU-accelerated)."""
+        """Batch embedding extraction (GPU-accelerated)."""
         if not crops_bgr:
             return np.empty((0, 512))
 
@@ -116,29 +134,58 @@ class ProductDetector:
 
         return features.cpu().numpy()
 
+    # ── Classification with Candidates ──────────────────────────────────
+
+    def _classify_with_candidates(self, embedding: np.ndarray) -> dict:
+        """
+        Classify an embedding and return top-3 candidates + ambiguity flag.
+        """
+        probs = self.knn.predict_proba(embedding.reshape(1, -1))[0]
+        sorted_idx = np.argsort(probs)[::-1]
+
+        # Top-3 candidates
+        candidates = []
+        for i in range(min(3, len(sorted_idx))):
+            idx = sorted_idx[i]
+            candidates.append({
+                "label": self.knn.classes_[idx],
+                "confidence": float(probs[idx]),
+            })
+
+        best_conf = candidates[0]["confidence"]
+        second_conf = candidates[1]["confidence"] if len(candidates) > 1 else 0
+
+        # Determine if this needs cashier confirmation
+        needs_confirmation = False
+        if AMBIGUITY_BAND[0] <= best_conf <= AMBIGUITY_BAND[1]:
+            needs_confirmation = True
+        if len(candidates) > 1 and (best_conf - second_conf) < AMBIGUITY_GAP:
+            needs_confirmation = True
+
+        return {
+            "label": candidates[0]["label"],
+            "confidence": best_conf,
+            "candidates": candidates,
+            "needs_confirmation": needs_confirmation,
+        }
+
     # ── Segmentation ────────────────────────────────────────────────────
 
     def _segment_frame(self, frame: np.ndarray) -> np.ndarray:
-        """
-        Use rembg (ISNet) to produce a foreground mask.
-        Returns a binary mask (0/255) where 255 = foreground.
-        """
+        """Use rembg (ISNet) to produce a foreground mask."""
         pil_in = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
         pil_out = remove(pil_in, session=self.rembg_session)
 
         alpha = np.array(pil_out)[:, :, 3]
-
-        # Low threshold to catch faint/distant objects
         _, mask = cv2.threshold(alpha, 50, 255, cv2.THRESH_BINARY)
 
-        # Gentle cleanup only — NO aggressive erosion
         kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
         mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel, iterations=1)
 
         return mask
 
     def _split_contour(self, mask_roi, offset_x, offset_y):
-        """Split a merged contour region using distance transform + watershed."""
+        """Split merged contours using distance transform + watershed."""
         dist = cv2.distanceTransform(mask_roi, cv2.DIST_L2, 5)
         if dist.max() == 0:
             return None
@@ -173,10 +220,8 @@ class ProductDetector:
 
     # ── Segmentation-Based Detection ────────────────────────────────────
 
-    def _detect_via_segmentation(self, frame: np.ndarray) -> list:
+    def _detect_via_segmentation(self, frame: np.ndarray, mask: np.ndarray) -> list:
         """Stage 1: Find products using rembg segmentation."""
-        mask = self._segment_frame(frame)
-
         contours, _ = cv2.findContours(
             mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
         )
@@ -211,15 +256,10 @@ class ProductDetector:
                     if crops:
                         embeddings = self._extract_embeddings_batch(crops)
                         for emb, bbox in zip(embeddings, boxes):
-                            probs = self.knn.predict_proba(emb.reshape(1, -1))[0]
-                            best_idx = np.argmax(probs)
-                            conf = probs[best_idx]
-                            if conf >= CONFIDENCE_THRESHOLD:
-                                detections.append({
-                                    "label": self.knn.classes_[best_idx],
-                                    "confidence": float(conf),
-                                    "bbox": bbox,
-                                })
+                            result = self._classify_with_candidates(emb)
+                            if result["confidence"] >= CONFIDENCE_THRESHOLD:
+                                result["bbox"] = bbox
+                                detections.append(result)
                     continue
 
             # Single product contour
@@ -233,57 +273,51 @@ class ProductDetector:
                 continue
 
             embedding = self._extract_embedding(crop)
-            probs = self.knn.predict_proba(embedding)[0]
-            best_idx = np.argmax(probs)
-            conf = probs[best_idx]
+            result = self._classify_with_candidates(embedding)
 
-            if conf >= CONFIDENCE_THRESHOLD:
-                detections.append({
-                    "label": self.knn.classes_[best_idx],
-                    "confidence": float(conf),
-                    "bbox": (x1, y1, x2 - x1, y2 - y1),
-                })
+            if result["confidence"] >= CONFIDENCE_THRESHOLD:
+                result["bbox"] = (x1, y1, x2 - x1, y2 - y1)
+                detections.append(result)
 
         return detections
 
-    # ── Sliding Window Detection ────────────────────────────────────────
+    # ── Sliding Window Detection (filtered by mask) ─────────────────────
 
-    def _detect_via_sliding_window(self, frame: np.ndarray) -> list:
+    def _detect_via_sliding_window(self, frame: np.ndarray, mask: np.ndarray) -> list:
         """
-        Stage 2: Scan the entire frame with overlapping tiles.
-        Catches objects that segmentation missed.
-        Uses batch GPU inference for speed.
+        Stage 2: Scan frame with overlapping tiles.
+        Only processes tiles that overlap with the foreground mask.
         """
         h, w = frame.shape[:2]
         crops = []
-        positions = []  # (x, y) of each tile's top-left corner
+        positions = []
 
         for y in range(0, h - TILE_SIZE + 1, TILE_STRIDE):
             for x in range(0, w - TILE_SIZE + 1, TILE_STRIDE):
-                tile = frame[y:y + TILE_SIZE, x:x + TILE_SIZE]
-                crops.append(tile)
-                positions.append((x, y))
+                # Check mask overlap — skip purely background tiles
+                tile_mask = mask[y:y + TILE_SIZE, x:x + TILE_SIZE]
+                fg_fraction = np.count_nonzero(tile_mask) / (TILE_SIZE * TILE_SIZE)
+
+                if fg_fraction >= TILE_MASK_OVERLAP:
+                    tile = frame[y:y + TILE_SIZE, x:x + TILE_SIZE]
+                    crops.append(tile)
+                    positions.append((x, y))
 
         if not crops:
             return []
 
-        # Batch classify all tiles at once
+        # Batch classify
         embeddings = self._extract_embeddings_batch(crops)
-        probs_all = self.knn.predict_proba(embeddings)
 
         detections = []
-        for i, (probs, (x, y)) in enumerate(zip(probs_all, positions)):
-            best_idx = np.argmax(probs)
-            conf = probs[best_idx]
+        for emb, (x, y) in zip(embeddings, positions):
+            result = self._classify_with_candidates(emb)
 
-            if conf >= TILE_CONFIDENCE:
-                detections.append({
-                    "label": self.knn.classes_[best_idx],
-                    "confidence": float(conf),
-                    "bbox": (x, y, TILE_SIZE, TILE_SIZE),
-                })
+            if result["confidence"] >= TILE_CONFIDENCE:
+                result["bbox"] = (x, y, TILE_SIZE, TILE_SIZE)
+                detections.append(result)
 
-        # NMS: for each label, keep only the highest confidence tile
+        # Keep highest confidence per label
         seen = {}
         for det in detections:
             lbl = det["label"]
@@ -299,43 +333,28 @@ class ProductDetector:
         """Compute IoU between two (x, y, w, h) bounding boxes."""
         x1, y1, w1, h1 = box1
         x2, y2, w2, h2 = box2
-
         xa = max(x1, x2)
         ya = max(y1, y2)
         xb = min(x1 + w1, x2 + w2)
         yb = min(y1 + h1, y2 + h2)
-
         inter = max(0, xb - xa) * max(0, yb - ya)
         if inter == 0:
             return 0.0
-
         union = w1 * h1 + w2 * h2 - inter
         return inter / union if union > 0 else 0.0
 
     def _merge_detections(self, seg_dets, sw_dets):
-        """
-        Merge segmentation and sliding window detections.
-        Segmentation results take priority when they overlap.
-        Sliding window fills in anything segmentation missed.
-        """
-        # Start with all segmentation detections
+        """Merge segmentation + sliding window results."""
         merged = {det["label"]: det for det in seg_dets}
 
-        # Add sliding window detections that don't overlap with segmentation
         for sw_det in sw_dets:
             label = sw_det["label"]
-
-            # If segmentation already found this product, skip
             if label in merged:
                 continue
-
-            # Check if this tile overlaps significantly with any seg detection
-            overlaps = False
-            for seg_det in seg_dets:
-                if self._bbox_iou(sw_det["bbox"], seg_det["bbox"]) > 0.2:
-                    overlaps = True
-                    break
-
+            overlaps = any(
+                self._bbox_iou(sw_det["bbox"], seg_det["bbox"]) > 0.2
+                for seg_det in seg_dets
+            )
             if not overlaps:
                 merged[label] = sw_det
 
@@ -346,20 +365,33 @@ class ProductDetector:
     def capture(self, frame: np.ndarray) -> list:
         """
         Detect products using hybrid approach:
-          1. rembg segmentation for large/obvious products
-          2. Sliding window scan to catch anything missed
-          3. Merge and deduplicate results
+          1. ISNet segmentation → contours → classify with candidates
+          2. Sliding window (mask-filtered) → batch classify
+          3. Merge and deduplicate
 
-        Returns list of dicts with 'label', 'confidence', 'bbox'.
+        Each detection includes:
+          - label, confidence, bbox
+          - candidates (top-3 with probabilities)
+          - needs_confirmation (bool)
         """
-        # Stage 1: Segmentation-based detection
-        seg_detections = self._detect_via_segmentation(frame)
+        # Get segmentation mask
+        mask = self._segment_frame(frame)
 
-        # Stage 2: Sliding window fallback
-        sw_detections = self._detect_via_sliding_window(frame)
+        # Stage 1: Segmentation-based
+        seg_detections = self._detect_via_segmentation(frame, mask)
 
-        # Merge results
-        return self._merge_detections(seg_detections, sw_detections)
+        # Stage 2: Sliding window (filtered by mask)
+        sw_detections = self._detect_via_sliding_window(frame, mask)
+
+        # Merge
+        results = self._merge_detections(seg_detections, sw_detections)
+
+        # Console log
+        for det in results:
+            flag = " ⚠ AMBIGUOUS" if det.get("needs_confirmation") else ""
+            print(f"  [DETECT] {det['label']} — {det['confidence']:.0%}{flag}")
+
+        return results
 
     def capture_multi(self, frames: list) -> list:
         """Multi-frame: average then detect."""
@@ -372,12 +404,10 @@ class ProductDetector:
         """Get raw segmentation mask (for debugging)."""
         return self._segment_frame(frame)
 
-    # ── Legacy (backward compat) ────────────────────────────────────────
+    # ── Legacy ──────────────────────────────────────────────────────────
 
     def set_background(self, frame: np.ndarray):
-        """Legacy: not needed with rembg."""
         self._reference_bg = frame
 
     def reset_background(self):
-        """Legacy: not needed with rembg."""
         self._reference_bg = None

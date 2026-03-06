@@ -28,46 +28,28 @@ export default function CameraFeed({
             <div className="camera-feed-wrapper">
                 {cameraConnected ? (
                     <>
-                        <img
-                            src={feedUrl}
-                            alt="Live camera feed"
-                            draggable={false}
-                        />
-
-                        {/* Overlay badges */}
+                        <img src={feedUrl} alt="Live camera feed" draggable={false} />
                         <div className="camera-overlay">
                             <span className="camera-badge live">● LIVE</span>
-                            {debugMode && (
-                                <span className="camera-badge debug">⬡ DETECT</span>
-                            )}
+                            {debugMode && <span className="camera-badge debug">⬡ DETECT</span>}
                             <span className="camera-badge">DroidCam</span>
                         </div>
-
-                        {/* Detection count */}
                         {lastDetectionCount > 0 && (
                             <div className="detection-count-badge">
-                                {lastDetectionCount} item{lastDetectionCount !== 1 ? "s" : ""}{" "}
-                                detected
+                                {lastDetectionCount} item{lastDetectionCount !== 1 ? "s" : ""} detected
                             </div>
                         )}
-
-                        {/* White flash on capture */}
                         {showFlash && <div className="capture-flash" />}
                     </>
                 ) : (
                     <div className="camera-no-feed">
                         <div className="camera-no-feed-icon">📷</div>
                         <h3>No Camera Feed</h3>
-                        <p>
-                            Start the backend server and connect DroidCam
-                            <br />
-                            <code>python server.py</code>
-                        </p>
+                        <p>Start the backend server and connect DroidCam<br /><code>python server.py</code></p>
                     </div>
                 )}
             </div>
 
-            {/* Controls */}
             <div className="camera-controls">
                 <button
                     className={`btn btn-capture ${isCapturing ? "capturing" : ""}`}
@@ -82,7 +64,6 @@ export default function CameraFeed({
                     className={`btn btn-debug-toggle ${debugMode ? "active" : ""}`}
                     onClick={() => setDebugMode((d) => !d)}
                     disabled={!cameraConnected}
-                    title="Toggle live object detection overlay"
                 >
                     <span className="btn-icon">🔍</span>
                     {debugMode ? "Debug ON" : "Debug"}
@@ -91,7 +72,6 @@ export default function CameraFeed({
                     className="btn btn-bg-reset"
                     onClick={onResetBackground}
                     disabled={!cameraConnected}
-                    title="Reset background reference"
                 >
                     <span className="btn-icon">🔄</span>
                     Reset BG
