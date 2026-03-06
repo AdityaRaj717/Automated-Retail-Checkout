@@ -36,8 +36,8 @@ from sklearn.neural_network import MLPClassifier
 
 # ── Config ──────────────────────────────────────────────────────────────────
 DATASET_DIR = os.path.join(os.path.dirname(__file__), "dataset", "processed")
-EMBEDDINGS_FILE = os.path.join(os.path.dirname(__file__), "embeddings.pkl")
-PRODUCTS_FILE = os.path.join(os.path.dirname(__file__), "products.json")
+EMBEDDINGS_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "embeddings.pkl")
+PRODUCTS_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "products.json")
 OUTPUT_DIR = os.path.dirname(__file__)
 
 KNN_NEIGHBORS = 5

@@ -160,9 +160,7 @@ slide6.addShape(pres.shapes.RIGHT_ARROW, { x: 6.45, y: 2.8, w: 0.2, h: 0.2, fill
 // --- Slide 7: Architecture Diagram ---
 let slide7 = pres.addSlide({ masterName: "LIGHT_CONTENT" });
 slide7.addText("Pipeline Diagram", { x: 0.5, y: 0.2, w: 9, h: 0.6, fontSize: 36, color: C_MIDNIGHT, bold: true, fontFace: "Arial Black" });
-slide7.addText("[Insert Architecture Diagram Here]", { x: 0.5, y: 2.5, w: 9, h: 1, fontSize: 24, color: "94A3B8", fontFace: "Calibri", align: "center", italic: true });
-// NOTE: Replace this with your architecture diagram image:
-// slide7.addImage({ path: "path/to/your/diagram.png", x: 0.5, y: 1.0, w: 9, h: 4, sizing: { type: "contain" } });
+slide7.addImage({ path: "../docs/architecture_diagram.png", x: 0.3, y: 1.0, w: 9.4, h: 4.2, sizing: { type: "contain" } });
 
 
 // --- Slide 8: Methodology - Dataset ---

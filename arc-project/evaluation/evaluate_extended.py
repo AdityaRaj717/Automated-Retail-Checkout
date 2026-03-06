@@ -39,8 +39,8 @@ from sklearn.model_selection import StratifiedKFold
 
 
 # ── Config ───────────────────────────────────────────────────────────────
-DATASET_DIR = os.path.join(os.path.dirname(__file__), "dataset", "processed")
-EMBEDDINGS_FILE = os.path.join(os.path.dirname(__file__), "embeddings.pkl")
+DATASET_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "dataset", "processed")
+EMBEDDINGS_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "embeddings.pkl")
 OUTPUT_DIR = os.path.dirname(__file__)
 N_FOLDS = 5
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")

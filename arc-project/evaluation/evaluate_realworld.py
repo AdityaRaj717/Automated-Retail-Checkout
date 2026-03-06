@@ -25,7 +25,7 @@ from sklearn.neural_network import MLPClassifier
 from sklearn.metrics import accuracy_score
 
 # ── Config ───────────────────────────────────────────────────────────────
-EMBEDDINGS_FILE = os.path.join(os.path.dirname(__file__), "embeddings.pkl")
+EMBEDDINGS_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "embeddings.pkl")
 OUTPUT_DIR = os.path.dirname(__file__)
 
 
