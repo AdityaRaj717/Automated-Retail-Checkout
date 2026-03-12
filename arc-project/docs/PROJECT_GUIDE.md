@@ -67,15 +67,20 @@ arc-project/
 │   └── confusion_matrix.png  # Visual confusion matrix
 │
 ├── docs/                     # Documentation and diagrams
-│   ├── mermaid_diagram.txt   # Architecture in Mermaid format
 │   ├── architecture_diagram.png
 │   └── PROJECT_GUIDE.md      # ← You are reading this
 │
+├── pptx/                     # PPTX skill files (reference)
 ├── presentation/             # PowerPoint generation
-│   ├── ppt_gen_v2.js         # Node.js script to generate PPTX
 │   ├── Retail_Checkout_Phase2_Presentation.pptx
-│   ├── package.json
-│   └── node_modules/
+│   └── ppt_gen_v2.js         # Node.js script to generate PPTX
+│
+├── docx/                     # Document generation
+│   ├── Literature_Survey_Retail_Billing.docx
+│   └── generate_literature_survey.js # Script to generate survey doc
+│
+├── research papers/          # Downloaded PDF academic reference papers
+│
 │
 ├── web/                      # Next.js frontend dashboard
 │   ├── app/
@@ -84,11 +89,9 @@ arc-project/
 │   │   └── components/
 │   │       ├── CameraFeed.jsx    # Live camera preview
 │   │       ├── BillPanel.jsx     # Dynamic shopping cart/bill
-│   │       ├── VisionMaps.jsx    # Depth map display
+│   │       ├── VisionMaps.jsx    # Depth map & Occlusion map display
 │   │       └── ...
 │   └── ...
-│
-└── pptx/                     # PPTX skill files (reference)
 ```
 
 ---
@@ -119,10 +122,11 @@ When the cashier clicks "Capture":
 
 | Component | Model/Algorithm | Purpose |
 |-----------|----------------|---------|
-| **Segmentation** | ISNet (via rembg library) | Pixel-level foreground extraction. Separates products from the table background. |
+| **Segmentation** | ISNet (via rembg) / Dichotomous Image Segmentation (DIS) | Pixel-level foreground extraction based on U^2-Net topology. Separates products from the table background. |
 | **Feature Extraction** | ResNet18 (ImageNet pre-trained, classification head removed) | Converts product images into 512-D embedding vectors for similarity matching. |
 | **Classification** | k-Nearest Neighbors (k=5, cosine metric) | Matches live embeddings against stored catalog using vector similarity. No retraining needed. |
 | **Depth Estimation** | Depth Anything V2 (via HuggingFace Transformers) | Generates monocular depth maps from single RGB images to estimate physical dimensions. |
+| **Occlusion Mapping** | Custom Horizon-Based Ambient Occlusion (HBAO) | Uses depth gradients to generate a shadow map prioritizing object contact boundaries and stacking crevices. |
 | **Contour Detection** | OpenCV (findContours + boundingRect) | Extracts geometric boundaries from segmentation masks for bounding box generation. |
 
 ### Why kNN instead of SVM/MLP/ResNet Classifier?
@@ -246,8 +250,15 @@ We use **Depth Anything V2** (a monocular depth estimation model) to generate a 
 4. Using the bounding box dimensions (width × height) and average depth, we estimate relative volume
 5. Volume thresholds differentiate between size variants
 
+### Contact Boundaries via Horizon-Based Ambient Occlusion (HBAO)
+Standard depth maps feature smooth gradients, which can struggle to show distinct boundaries between two products tightly stacked together. To solve this, our pipeline includes a custom **HBAO** generator:
+1. It computes surface normals by taking the gradients of the depth map (`cv2.Sobel`).
+2. It samples multiple directions in hemispherical space above the pixel's expected tangent plane.
+3. Rapid changes in depth (like the crevice between a packet and the table, or two overlapping boxes) restrict the "horizon angle," creating dark contact shadows.
+4. If objects are physically touching, the HBAO pass separates them visually, preventing overlapping bounds.
+
 ### The Depth Map Display
-The Next.js dashboard shows the depth map in the "Vision Maps" panel, giving the cashier (and supervisor) visual confirmation that depth analysis is running.
+The Next.js dashboard shows both the colorized depth map and the HBAO map in the "Vision Maps" panel, giving the cashier (and supervisor) visual confirmation that volumetric analysis is running actively.
 
 ---
 
@@ -400,3 +411,10 @@ cd arc-project/presentation
 node ppt_gen_v2.js
 ```
 Output: `Retail_Checkout_Phase2_Presentation.pptx`
+
+### Regenerate Literature Survey Document
+```bash
+cd arc-project/docx
+node generate_literature_survey.js
+```
+Output: `Literature_Survey_Retail_Billing.docx`
