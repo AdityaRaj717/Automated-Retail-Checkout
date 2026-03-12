@@ -96,7 +96,7 @@ challengeBlocks.forEach(b => {
 
 // --- Slide 4: Challenges in Current Technologies ---
 let slide4 = pres.addSlide({ masterName: "DARK_CONTENT" });
-slide4.addText("Challenges in Current Retail Tech", { x: 0.5, y: 0.2, w: 9, h: 0.6, fontSize: 36, color: C_WHITE, bold: true, fontFace: "Arial Black" });
+slide4.addText("Challenges in Current Retail Tech [9, 14]", { x: 0.5, y: 0.2, w: 9, h: 0.6, fontSize: 36, color: C_WHITE, bold: true, fontFace: "Arial Black" });
 
 slide4.addTable([
     [{ text: "Technology", options: { bold: true, fill: { color: "1E293B" }, color: "FFFFFF" } },
@@ -125,15 +125,15 @@ slide5.addText("Proposed Framework", { x: 0.5, y: 0.2, w: 9, h: 0.6, fontSize: 3
 slide5.addText("A 3-Stage Visual Pipeline solving scalability & occlusion.", { x: 0.5, y: 1.0, w: 9, h: 0.4, fontSize: 18, color: C_TEAL, bold: true, fontFace: "Arial" });
 
 slide5.addShape(pres.shapes.RECTANGLE, { x: 0.5, y: 1.5, w: 9, h: 0.8, fill: { color: "F8FAFC" }, line: { color: C_GRAY, width: 1 } });
-slide5.addText("1. Zero-Retraining Pipeline (Hot-Reloading)", { x: 0.6, y: 1.6, w: 8.8, h: 0.3, fontSize: 16, color: C_DEEPBLUE, bold: true });
+slide5.addText("1. Zero-Retraining Pipeline (Hot-Reloading) [2, 10]", { x: 0.6, y: 1.6, w: 8.8, h: 0.3, fontSize: 16, color: C_DEEPBLUE, bold: true });
 slide5.addText("Uses Deep Metric Extraction + kNN. Adding a product simply requires adding an image to the database. The system dynamically generates an embedding vector.", { x: 0.6, y: 1.9, w: 8.8, h: 0.3, fontSize: 14, color: C_TEXT });
 
 slide5.addShape(pres.shapes.RECTANGLE, { x: 0.5, y: 2.5, w: 9, h: 0.8, fill: { color: "F8FAFC" }, line: { color: C_GRAY, width: 1 } });
-slide5.addText("2. Hybrid Detection & Segmentation", { x: 0.6, y: 2.6, w: 8.8, h: 0.3, fontSize: 16, color: C_DEEPBLUE, bold: true });
+slide5.addText("2. Hybrid Detection & Segmentation [1, 4]", { x: 0.6, y: 2.6, w: 8.8, h: 0.3, fontSize: 16, color: C_DEEPBLUE, bold: true });
 slide5.addText("Pairs Dichotomous Segmentation with a raw-frame Sliding Window Scanner to guarantee 100% recall—even for tiny items like matchboxes that get eroded by masks.", { x: 0.6, y: 2.9, w: 8.8, h: 0.3, fontSize: 14, color: C_TEXT });
 
 slide5.addShape(pres.shapes.RECTANGLE, { x: 0.5, y: 3.5, w: 9, h: 0.8, fill: { color: "F8FAFC" }, line: { color: C_GRAY, width: 1 } });
-slide5.addText("3. Monocular Depth Integration", { x: 0.6, y: 3.6, w: 8.8, h: 0.3, fontSize: 16, color: C_DEEPBLUE, bold: true });
+slide5.addText("3. Monocular Depth Integration [3, 7]", { x: 0.6, y: 3.6, w: 8.8, h: 0.3, fontSize: 16, color: C_DEEPBLUE, bold: true });
 slide5.addText("Generates physical depth maps to calculate volumetric scale. Identifies size variants of the same packaging (10rs vs 30rs).", { x: 0.6, y: 3.9, w: 8.8, h: 0.3, fontSize: 14, color: C_TEXT });
 
 
@@ -186,11 +186,11 @@ let slide9 = pres.addSlide({ masterName: "LIGHT_CONTENT" });
 slide9.addText("Methodology", { x: 0.5, y: 0.2, w: 9, h: 0.6, fontSize: 36, color: C_MIDNIGHT, bold: true, fontFace: "Arial Black" });
 
 slide9.addText([
-    { text: "1. Foreground Segmentation", options: { bold: true, fontSize: 18, color: C_DEEPBLUE } },
+    { text: "1. Foreground Segmentation [1, 4]", options: { bold: true, fontSize: 18, color: C_DEEPBLUE } },
     { text: " Extracts the exact boundaries of each item dynamically from the raw frame. Isolates objects from complex noise without classifying them yet.", options: { breakLine: true, fontSize: 16 } },
     { text: "2. Missing-Item Fallback", options: { bold: true, fontSize: 18, color: C_DEEPBLUE } },
     { text: " A sliding window scanner checks for highly intense non-background blobs that the segmentation eroded, assuring tiny objects (like matchboxes) are retained.", options: { breakLine: true, fontSize: 16 } },
-    { text: "3. kNN Classification in 1280-D Space", options: { bold: true, fontSize: 18, color: C_DEEPBLUE } },
+    { text: "3. kNN Classification in 1280-D Space [2, 10]", options: { bold: true, fontSize: 18, color: C_DEEPBLUE } },
     { text: " Uses Cosine Similarity against the hot-reloaded dataset embeddings to return Top-3 product candidates with confidence scores.", options: { breakLine: true, fontSize: 16 } },
     { text: "4. Ambiguity Resolution (Human in loop)", options: { bold: true, fontSize: 18, color: C_DEEPBLUE } },
     { text: " If `confidence < 0.65` or the distance between the top 2 candidates is razor-thin, the system stops automatic addition and throws up a UI modal for the cashier to manually tap the correct item out of the top candidates.", options: { fontSize: 16 } }
@@ -204,8 +204,8 @@ slide10.addText("Implementation Challenges", { x: 0.5, y: 0.2, w: 9, h: 0.6, fon
 let probBlocks = [
     { t: "Erosion of Small Items", d: "Aggressive morphological erosion destroyed small items (Matchboxes/Tic-Tacs). Solved via the custom hybrid window scanner.", x: 0.5, y: 1.2 },
     { t: "Phantom Detections", d: "When the table was empty, ambient lighting caused ghost bounding boxes. Solved by integrating a 'Reset BG' calibration snapshot.", x: 5.1, y: 1.2 },
-    { t: "Identical Packaging", d: "10rs vs 30rs packets are visually identical. Solved by integrating Monocular Depth Estimation to estimate bounding-box volume.", x: 0.5, y: 3.0 },
-    { t: "Ambient Occlusion Errors", d: "DAv2 depth maps have smooth gradients. Simple SSAO failed to show contact. Built a custom Horizon-Based Ambient Occlusion (HBAO) map.", x: 5.1, y: 3.0 }
+    { t: "Identical Packaging", d: "10rs vs 30rs packets are visually identical. Solved by integrating Monocular Depth Estimation [3] to estimate bounding-box volume.", x: 0.5, y: 3.0 },
+    { t: "Ambient Occlusion Errors", d: "DAv2 depth maps [3] have smooth gradients. Simple SSAO [11] failed to show contact. Built a custom Horizon-Based Ambient Occlusion (HBAO) map.", x: 5.1, y: 3.0 }
 ];
 
 probBlocks.forEach(b => {
@@ -222,9 +222,9 @@ slide11.addText("Our Custom Models & Backbones", { x: 0.5, y: 0.2, w: 9, h: 0.6,
 slide11.addTable([
     [{ text: "Component/Model", options: { bold: true, fill: { color: C_TEAL }, color: "FFFFFF" } },
     { text: "Why We Chose It", options: { bold: true, fill: { color: C_TEAL }, color: "FFFFFF" } }],
-    [{ text: "Custom Dichotomous Segmenter\n(based on U2-Net extraction)" }, { text: "Highly accurate foreground/background separation without needing predefined YOLO classes. Isolates boundaries perfectly." }],
-    [{ text: "Deep Feature Extractor\n(1280-D Metric Space Backbone)" }, { text: "Extracts invariant visual features (textures, colors, typography). Enables our Zero-Retraining hot-reload capability." }],
-    [{ text: "Monocular Depth Estimator\n(DAv2 Architecture)" }, { text: "Estimates robust relative depth maps from single 2D images. Crucial for calculating volume and generating HBAO maps." }],
+    [{ text: "Custom Dichotomous Segmenter\n(based on U2-Net extraction) [1, 4]" }, { text: "Highly accurate foreground/background separation without needing predefined YOLO classes. Isolates boundaries perfectly." }],
+    [{ text: "Deep Feature Extractor\n(1280-D Metric Space Backbone) [2, 10]" }, { text: "Extracts invariant visual features (textures, colors, typography). Enables our Zero-Retraining hot-reload capability." }],
+    [{ text: "Monocular Depth Estimator\n(DAv2 Architecture) [3]" }, { text: "Estimates robust relative depth maps from single 2D images. Crucial for calculating volume and generating HBAO maps [11]." }],
     [{ text: "k-Nearest Neighbors (kNN)" }, { text: "Instead of a fully connected neural network layer, kNN calculates Cosine Similarity, comparing new items to the pre-embedded catalog." }]
 ], {
     x: 0.5, y: 1.2, w: 9, h: 3.5,
@@ -243,7 +243,7 @@ let slide12 = pres.addSlide({ masterName: "LIGHT_CONTENT" });
 slide12.addText("Performance vs. Alternatives", { x: 0.5, y: 0.2, w: 9, h: 0.6, fontSize: 36, color: C_MIDNIGHT, bold: true, fontFace: "Arial Black" });
 
 slide12.addShape(pres.shapes.RECTANGLE, { x: 0.5, y: 1.2, w: 4.3, h: 1.7, fill: { color: "EFF6FF" }, line: { color: "BFDBFE", width: 1 } });
-slide12.addText("Our Pipeline vs Standard YOLO", { x: 0.6, y: 1.3, w: 4.1, h: 0.3, fontSize: 18, color: C_DEEPBLUE, bold: true });
+slide12.addText("Our Pipeline vs Standard YOLO [8]", { x: 0.6, y: 1.3, w: 4.1, h: 0.3, fontSize: 18, color: C_DEEPBLUE, bold: true });
 slide12.addText("Adding ONE new flavor of chips to YOLO requires collecting 200 images, re-annotating, and retraining the entire network. Our Metric Learning pipeline requires 0 training. Simply add images to a folder.", { x: 0.6, y: 1.7, w: 4.1, h: 1.1, fontSize: 14, color: C_TEXT, align: "left" });
 
 slide12.addShape(pres.shapes.RECTANGLE, { x: 5.2, y: 1.2, w: 4.3, h: 1.7, fill: { color: "EFF6FF" }, line: { color: "BFDBFE", width: 1 } });
@@ -271,7 +271,7 @@ slide13.addTable([
     [{ text: "SVM (RBF Kernel)" }, { text: "99.69%", options: { align: "center" } }, { text: "0.9970", options: { align: "center" } }, { text: "0.9969", options: { align: "center" } }, { text: "0.9969", options: { align: "center" } }],
     [{ text: "Random Forest" }, { text: "98.44%", options: { align: "center" } }, { text: "0.9847", options: { align: "center" } }, { text: "0.9844", options: { align: "center" } }, { text: "0.9844", options: { align: "center" } }],
     [{ text: "MLP Neural Network" }, { text: "99.69%", options: { align: "center" } }, { text: "0.9970", options: { align: "center" } }, { text: "0.9969", options: { align: "center" } }, { text: "0.9969", options: { align: "center" } }],
-    [{ text: "YOLOv8 (est. from literature)", options: { italic: true } }, { text: "~95-98%", options: { align: "center", italic: true } }, { text: "~0.96", options: { align: "center", italic: true } }, { text: "~0.96", options: { align: "center", italic: true } }, { text: "~0.96", options: { align: "center", italic: true } }]
+    [{ text: "YOLOv8 (est. from literature) [8]", options: { italic: true } }, { text: "~95-98%", options: { align: "center", italic: true } }, { text: "~0.96", options: { align: "center", italic: true } }, { text: "~0.96", options: { align: "center", italic: true } }, { text: "~0.96", options: { align: "center", italic: true } }]
 ], {
     x: 0.5, y: 1.4, w: 9, h: 2.5,
     colW: [3.5, 1.4, 1.4, 1.4, 1.3],
@@ -363,7 +363,7 @@ slide16.addTable([
     [{ text: "SVM" }, { text: "86.25 ms", options: { align: "center" } }, { text: "71x", options: { align: "center" } }],
     [{ text: "MLP" }, { text: "2,600 ms", options: { align: "center" } }, { text: "2.4x", options: { align: "center" } }],
     [{ text: "ResNet18 Classifier" }, { text: "6,125 ms", options: { align: "center", color: C_RED } }, { text: "1x", options: { align: "center", color: C_RED } }],
-    [{ text: "YOLOv8 (full retrain)", options: { italic: true } }, { text: "~300,000 ms", options: { align: "center", color: C_RED, italic: true } }, { text: "~5 min", options: { align: "center", color: C_RED, italic: true } }]
+    [{ text: "YOLOv8 (full retrain) [8]", options: { italic: true } }, { text: "~300,000 ms", options: { align: "center", color: C_RED, italic: true } }, { text: "~5 min", options: { align: "center", color: C_RED, italic: true } }]
 ], {
     x: 0.5, y: 1.4, w: 9, h: 1.5,
     colW: [3.5, 3, 2.5],

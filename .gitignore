@@ -1,76 +1,68 @@
-.venv
-
-node_modules
+# General
+node_modules/
+**/node_modules/
+.~lock.*
+.venv/
+venv/
+ENV/
+.env
+.python-version
+.DS_Store
+Thumbs.db
+*.local
 
 # Logs
-logs
+logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
-yarn-error.log*
 pnpm-debug.log*
-lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
-*.local
-
-# Editor directories and files
-.vscode/*
+# Editor
+.vscode/
 !.vscode/extensions.json
-.idea
-.DS_Store
+.idea/
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
 
-# --- ARC PROJECT EXCLUSIONS ---
-
-# Python
+# ARC Project
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 *.egg-info/
 pip-log.txt
+.ipynb_checkpoints/
 
-# Virtual environments
-.venv/
-venv/
-ENV/
-
-# Models, weights, and embeddings
+# Models & Databases
 *.pth
 *.pt
 *.onnx
 *.tflite
+*.sqlite
+*.db
 embeddings.pkl
-
-# Model cache
 .cache/
 torch_cache/
 
-# Databases
-*.sqlite
-*.db
-src/products.db
-
-# Datasets & Downloads
+# Project Artifacts & Documents
 dataset/
-research_papers/
-
-# Screenshots from checkout system
 screenshots/
-
-# Jupyter
-.ipynb_checkpoints/
-
-# OS files
-Thumbs.db
-.DS_Store
-
-.ppt
-.pptx
+**/node_modules/
+**/scripts/
+**/schemas/
+**/*.ppt
+**/*.pptx
+**/*.pdf
+**/*.doc
+**/*.docx
+**/*.pkl
+**/*.pth
+**/*.pt
+**/*.onnx
+**/*.tflite
+**/*.sqlite
+**/*.db
