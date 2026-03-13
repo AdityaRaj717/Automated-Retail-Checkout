@@ -441,5 +441,66 @@ The "Skip Connection" Innovation: ResNet (Residual Network) was famous for intro
 Speed vs. Accuracy: ResNet18 is the "lightweight" version of the family. Since your checkout system needs to process a live camera feed at 30 frames per second, we needed a model that is extremely fast. Larger models (like ResNet50 or ResNet101) would produce slightly better embeddings but would make the dashboard feel "laggy."
 Transfer Learning: Our ResNet18 was "pre-trained" on ImageNet (a dataset of over 1.2 million images). This means the model already "knows" what a product's shiny plastic packaging, cardboard edges, and bright colors look like, even if it hasn't seen your specific brand of hajmola yet.
 Compact Embeddings: The 512-dimensional output is small enough to store thousands of products in a single tiny file (embeddings.pkl) that can be searched in less than a millisecond.
-In short: We use ResNet to turn images into "DNA strings," and we remove the head so the system can recognize any new product you drop into the folder without you ever having to "train" the AI again!
+## 13. System Architecture FAQ
 
+### What does "Classification Head Removed" mean for ResNet?
+A standard AI model like **ResNet18** is usually designed to look at an image and pick one category out of 1,000 (like "dog," "car," or "bottle"). It does this in two stages:
+1.  **The Feature Extractor (Body):** The first 17 layers "look" at the image and turn it into a list of 512 numbers representing textures, colors, and shapes.
+2.  **The Classification Head (Tail):** The very last layer takes those 512 numbers and forces them to choose a specific label.
+
+**By removing the "head,"** we stop the model from guessing what the object is. Instead, we just keep the **512-dimensional vector (the embedding)**. This turns the model into a **Digital Fingerprinter**. Instead of saying "This is Maggi," it says "This image has a DNA signature of [0.12, -0.45, ...]". We then use **kNN** to see which product fingerprint in our database is the closest match, completely eliminating the need to retrain the AI when adding new products.
+
+### What is Watershed and why do we use it?
+**Watershed** is a classic computer vision algorithm used to separate objects that are touching or overlapping in a segmentation mask.
+If a customer places two packets of Maggi on the table and they are physically touching, the segmentation model sees them as **one single giant white blob**, leading to a single bounding box and under-charging the customer.
+We use a Distance-Transform-based Watershed algorithm to "flood" the blob from its internal centers. Where the floods meet is exactly where the two packets touch, allowing us to mathematically separate them and detect both items accurately.
+
+### What is Bounding Box (BBox) Cropping?
+BBox Cropping is our spatial filtering step. Once the segmentation mask identifies a product's location, we calculate its bounding rectangle coordinates `[x, y, width, height]` and cut that specific sub-section out of the high-res camera frame (with a 15-pixel padding buffer).
+This ensures the ResNet18 feature extractor focuses *exclusively* on the visual signatures of the specific product, removing background noise like the table or the cashier's hands.
+
+---
+
+## 14. The Detection Journey (End-to-End Flow)
+
+Think of the system like a multi-stage filter. Here is the step-by-step journey of a single frame from the camera to the final bill:
+
+### Stage 1: Finding the Objects (Segmentation & Detection)
+*   **Direct Input:** The camera sends a raw RGB image to the server.
+*   **`rembg` (The Background Eraser):** Isolates the products from the table using the ISNet model to "erase" the table.
+    *   *Result:* A black & white Mask (white = product, black = table).
+*   **`findContours` (The Outline Tracer):** Traces the edges of the white areas in the mask.
+*   **`Watershed` (The Separator):** If a blob's area is too large, it is split along its hidden occlusion seam.
+*   **`Sliding Windows` (The Fallback):** Slides a 224x224 window across the image to double-check areas that have color/texture but were missed by the mask (useful for tiny items).
+
+### Stage 2: Identifying the Objects (Cropping & AI)
+*   **`BBox Cropping` (The Zoom):** "Crops" each bounding rectangle from the original high-res photo so the AI isn't distracted.
+*   **`ResNet18` (The Digital Fingerprinter):** We feed the crop into the headless ResNet model to output a 512-dimensional vector.
+*   **`kNN Matching` (The ID Check):** We compare those 512 numbers against the `embeddings.pkl` database to find the closest stored fingerprint.
+
+### Stage 3: The Final Decision (Post-Processing)
+*   **Deduplication (IoU):** If the Contour tracer and the Sliding Window found the same item, we use IoU (Intersection over Union) to delete the duplicate detection.
+*   **Depth/Volume Resolution:** If the AI is unsure of the size variant (e.g., 10rs vs. 30rs Maggi), the Depth Estimator looks at the estimated volume of the crop to pick the correct price.
+
+### Summary Flowchart
+
+```mermaid
+graph TD
+    A[Camera Frame] --> B[rembg / ISNet]
+    B --> C[Binary Mask]
+    C --> D[findContours]
+    D --> E{Blob too big?}
+    E -- Yes --> F[Watershed Splitting]
+    E -- No --> G[Bounding Boxes]
+    F --> G
+    A --> H[Sliding Window Scan]
+    G & H --> I[BBox Cropping]
+    I --> J[ResNet18 / Feature Extraction]
+    J --> K[512-D Embedding]
+    K --> L[kNN Similarity Match]
+    L --> M[Deduplication / IoU]
+    M --> N[Depth Variant Resolution]
+    N --> O[Final Bill Displayed]
+```
+
+> **Why this matters:** If you only used an end-to-end classifier like YOLO or a standard ResNet, you would have to retrain the whole brain for every new item. By using this decoupled flow, you only have to update the **kNN database**, making your system infinitely scalable without downtime.
