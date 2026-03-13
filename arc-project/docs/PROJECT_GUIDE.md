@@ -503,4 +503,47 @@ graph TD
     N --> O[Final Bill Displayed]
 ```
 
-> **Why this matters:** If you only used an end-to-end classifier like YOLO or a standard ResNet, you would have to retrain the whole brain for every new item. By using this decoupled flow, you only have to update the **kNN database**, making your system infinitely scalable without downtime.
+> **Why this matters:** If you only used an end-to-end classifier like YOLO or a standard ResNet, you would have to retrain the whole brain for every new item. By decoupled flow, you only have to update the **kNN database**, making your system infinitely scalable without downtime.
+
+---
+
+## 15. Supervisor Review Guide: What to Show & Say
+
+If your supervisor asks to review the code, do not show them everything at once. Focus entirely on the files that prove **technical depth**, **custom algorithms**, and **architectural cleanliness**. 
+
+Here is exactly what files to open, which lines to highlight, and what to say:
+
+### 1. The "Zero-Retraining" Magic & Architecture
+**File:** [`arc-project/build_embeddings.py`](file:///mnt/Personal/Programming/Self%20Learning/Projects/Capstone/Retail%20System/arc-project/build_embeddings.py) 
+**Exact Lines:** `Lines 26-33` (`get_feature_extractor`)
+
+*   **What to show:** Show how you load `models.resnet18` and then explicitly run `model = nn.Sequential(*list(model.children())[:-1])`.
+*   **What to say (If asked about the model layers):** *"We use ResNet18 because of its 'Skip Connections' which prevent feature loss in deep networks, and it's lightweight enough to run at 30fps. However, we removed the final Fully Connected (FC) classification head. Instead of forcing the model to guess between 1,000 ImageNet classes, the model stops at the penultimate layer and acts as a Digital Fingerprinter, outputting a 512-dimensional vector. This allows us to map any new product dynamically using kNN without ever having to retrain the neural network weights."*
+
+### 2. The "Blob" Separation Algorithm
+**File:** [`arc-project/detector.py`](file:///mnt/Personal/Programming/Self%20Learning/Projects/Capstone/Retail%20System/arc-project/detector.py)
+**Exact Lines:** `Lines 187-219` (`_split_contour`)
+
+*   **What to show:** Show the `cv2.distanceTransform` and `cv2.watershed` implementation.
+*   **What to say:** *"To handle occlusion and cluttered scenes where products physically touch, we implemented a Distance-Transform-based Watershed algorithm. If ISNet segments two touching items as a single giant blob, this mathematical approach finds the 'valleys' and 'peaks' of the shape to locate the hidden seam where they touch, ensuring we accurately cut the bounding box and don't under-count products."*
+
+### 3. Spatial Filtering via BBoxes
+**File:** [`arc-project/detector.py`](file:///mnt/Personal/Programming/Self%20Learning/Projects/Capstone/Retail%20System/arc-project/detector.py)
+**Exact Lines:** `Lines 265-276` (Inside `_detect_via_segmentation`)
+
+*   **What to show:** Show the padding logic (`pad = 15`) and the array slicing (`crop = frame[y1:y2, x1:x2]`).
+*   **What to say:** *"Once the contours are verified, we perform Bounding Box Cropping with a 15-pixel spatial buffer. This acts as a spatial filter, completely removing the background table and noise so the ResNet18 feature extractor focuses exclusively on the visual signatures of the specific product, maximizing our classification accuracy."*
+
+### 4. Custom Volumetric Depth Mapping
+**File:** [`arc-project/depth_estimator.py`](file:///mnt/Personal/Programming/Self%20Learning/Projects/Capstone/Retail%20System/arc-project/depth_estimator.py)
+**Exact Lines:** `Lines 149-293` (`generate_occlusion_map`)
+
+*   **What to show:** Show the dense math involving depth gradients (`cv2.Sobel`), surface normals (`nx, ny, nz`), and hemisphere sampling.
+*   **What to say:** *"Standard depth maps struggle with distinct boundaries on flat tables. We implemented a custom Horizon-Based Ambient Occlusion (HBAO) algorithm from scratch over the Depth Anything V2 outputs. It computes surface normals by taking depth gradients and uses hemisphere sampling to generate precise dark contact shadows where items touch the table or overlap, significantly aiding our volumetric resolution."*
+
+### 5. Temporal Smoothing & Server Architecture
+**File:** [`arc-project/server.py`](file:///mnt/Personal/Programming/Self%20Learning/Projects/Capstone/Retail%20System/arc-project/server.py)
+**Exact Lines:** `Lines 240-338` (`video_feed_debug`)
+
+*   **What to show:** Show the `detection_history = deque(maxlen=6)` and the averaging logic over recent runs.
+*   **What to say:** *"Since this is a real-time system, we built an asynchronous decoupled architecture in FastAPI. The raw camera stream runs continuously for zero-latency UI feedback, while the heavy deep learning pipeline runs on an interval. We implemented a temporal consensus algorithm that averages bounding boxes and confidences across a 3-second rolling window, ensuring the detections remain stable and professional."*
