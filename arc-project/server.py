@@ -8,27 +8,27 @@ Usage:
     python server.py
 """
 
-import os
 import io
 import json
-import time
+import os
 import threading
+import time
 from collections import deque
-import cv2
-import numpy as np
 from contextlib import asynccontextmanager
 
+import cv2
+import numpy as np
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse, JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
 import database as db
-from detector import ProductDetector
 from depth_estimator import DepthEstimator
+from detector import ProductDetector
 
 # ── Config ──────────────────────────────────────────────────────────────────
-DROIDCAM_URL = "http://10.91.13.197:4747/video"
+DROIDCAM_URL = "http://10.186.248.22:4747/video"
 
 
 # ── Camera Manager ──────────────────────────────────────────────────────────

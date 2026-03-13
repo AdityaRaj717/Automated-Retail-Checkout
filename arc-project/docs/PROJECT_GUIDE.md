@@ -418,3 +418,28 @@ cd arc-project/docx
 node generate_literature_survey.js
 ```
 Output: `Literature_Survey_Retail_Billing.docx`
+
+
+
+In the context of our retail system, this is actually the "secret sauce" that makes the zero-retraining feature possible. Here is a breakdown of what that means and why we chose this specific model:
+
+1. What does "Classification Head Removed" mean?
+A standard AI model like ResNet18 is usually designed to look at an image and pick one category out of 1,000 (like "dog," "car," or "bottle"). It does this in two stages:
+
+The Feature Extractor (Body): The first 17 layers "look" at the image and turn it into a list of 512 numbers. These numbers represent the textures, colors, and shapes of the product.
+The Classification Head (Tail): The very last layer takes those 512 numbers and forces them to choose a specific label (e.g., "Label #42").
+By removing the "head," we stop the model from trying to guess what the object is. Instead, we just keep the 512 numbers (the embedding).
+
+TIP
+
+This turns the model into a Digital Fingerprinter. Instead of saying "This is Maggi," it says "This image has a DNA signature of $[0.12, -0.45, ...]$." We then use kNN to see which product fingerprint in our database is the closest match.
+
+2. Why are we using ResNet?
+We chose ResNet18 specifically for a few technical and practical reasons:
+
+The "Skip Connection" Innovation: ResNet (Residual Network) was famous for introducing "skip connections" that allow the model to learn much more effectively. It prevents the model from "forgetting" features as it gets deeper.
+Speed vs. Accuracy: ResNet18 is the "lightweight" version of the family. Since your checkout system needs to process a live camera feed at 30 frames per second, we needed a model that is extremely fast. Larger models (like ResNet50 or ResNet101) would produce slightly better embeddings but would make the dashboard feel "laggy."
+Transfer Learning: Our ResNet18 was "pre-trained" on ImageNet (a dataset of over 1.2 million images). This means the model already "knows" what a product's shiny plastic packaging, cardboard edges, and bright colors look like, even if it hasn't seen your specific brand of hajmola yet.
+Compact Embeddings: The 512-dimensional output is small enough to store thousands of products in a single tiny file (embeddings.pkl) that can be searched in less than a millisecond.
+In short: We use ResNet to turn images into "DNA strings," and we remove the head so the system can recognize any new product you drop into the folder without you ever having to "train" the AI again!
+
